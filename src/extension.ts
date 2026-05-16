@@ -1,6 +1,6 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { CanvasPanel } from './CanvasPanel';
+import { NodeSidebarProvider } from './NodeSidebarProvider';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -14,12 +14,21 @@ export function activate(context: vscode.ExtensionContext) {
 	// Now provide the implementation of the command with registerCommand
 	// The commandId parameter must match the command field in package.json
 	const disposable = vscode.commands.registerCommand('etl-code.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
 		vscode.window.showInformationMessage('Hello World from etl-code!');
 	});
 
-	context.subscriptions.push(disposable);
+	const canvasCommand = vscode.commands.registerCommand('etl-code.openCanvas', () => {
+		CanvasPanel.createOrShow(context.extensionUri);
+		vscode.commands.executeCommand('etl-code.nodeSidebar.focus');
+	});
+
+	const sidebarProvider = new NodeSidebarProvider(context.extensionUri);
+	const sidebarRegistration = vscode.window.registerWebviewViewProvider(
+		NodeSidebarProvider.viewType,
+		sidebarProvider
+	);
+
+	context.subscriptions.push(disposable, canvasCommand, sidebarRegistration);
 }
 
 // This method is called when your extension is deactivated
