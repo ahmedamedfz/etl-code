@@ -16,7 +16,9 @@ const esbuildProblemMatcherPlugin = {
 		build.onEnd((result) => {
 			result.errors.forEach(({ text, location }) => {
 				console.error(`✘ [ERROR] ${text}`);
-				console.error(`    ${location.file}:${location.line}:${location.column}:`);
+				if (location) {
+					console.error(`    ${location.file}:${location.line}:${location.column}:`);
+				}
 			});
 			console.log('[watch] build finished');
 		});
@@ -45,15 +47,17 @@ async function main() {
 
 	const webviewCtx = await esbuild.context({
 		entryPoints: [
-			'src/webview/index.tsx'
+			'src/webview/index.tsx',
+			'src/webview/Sidebar.tsx',
+			'src/webview/Details.tsx'
 		],
+		outdir: 'dist',
 		bundle: true,
 		format: 'iife',
 		minify: production,
 		sourcemap: !production,
 		sourcesContent: false,
 		platform: 'browser',
-		outfile: 'dist/webview.js',
 		logLevel: 'silent',
 		define: {
 			'process.env.NODE_ENV': production ? '"production"' : '"development"',

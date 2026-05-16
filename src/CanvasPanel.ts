@@ -2,29 +2,29 @@ import * as vscode from 'vscode';
 
 export class CanvasPanel {
     public static currentPanel: CanvasPanel | undefined;
-
     public static readonly viewType = 'etlCanvas';
 
     private readonly _panel: vscode.WebviewPanel;
     private readonly _extensionUri: vscode.Uri;
     private _disposables: vscode.Disposable[] = [];
 
-    public static createOrShow(extensionUri: vscode.Uri) {
-        const column = vscode.window.activeTextEditor
-            ? vscode.window.activeTextEditor.viewColumn
-            : undefined;
+    // Static listener for updating the detail provider
+    public static onNodeSelected?: (nodeData: any) => void;
+    public static onNodeUpdated?: (nodeData: any) => void;
+    public static onNodesDeleted?: (nodeIds: string[]) => void;
 
-        // If we already have a panel, show it.
+    public static createOrShow(extensionUri: vscode.Uri) {
+        // If we already have a panel, reveal it.
         if (CanvasPanel.currentPanel) {
-            CanvasPanel.currentPanel._panel.reveal(column);
-            return;
+            CanvasPanel.currentPanel._panel.reveal(vscode.ViewColumn.One);
+            return CanvasPanel.currentPanel;
         }
 
         // Otherwise, create a new panel.
         const panel = vscode.window.createWebviewPanel(
             CanvasPanel.viewType,
             'ETL Canvas',
-            column || vscode.ViewColumn.One,
+            vscode.ViewColumn.One,
             {
                 enableScripts: true,
                 localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'dist')],
@@ -33,6 +33,7 @@ export class CanvasPanel {
         );
 
         CanvasPanel.currentPanel = new CanvasPanel(panel, extensionUri);
+        return CanvasPanel.currentPanel;
     }
 
     private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
@@ -43,13 +44,58 @@ export class CanvasPanel {
         this._update();
 
         // Listen for when the panel is disposed
-        // This happens when the user closes the panel or when the extension is deactivated
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+
+        this._setWebviewMessageListener(this._panel.webview);
+    }
+
+    private _setWebviewMessageListener(webview: vscode.Webview) {
+        webview.onDidReceiveMessage(
+            async (message: any) => {
+                switch (message.type) {
+                    case 'nodeSelected':
+                        if (CanvasPanel.onNodeSelected) {
+                            CanvasPanel.onNodeSelected(message.nodeData);
+                        }
+                        // Focus the node details view
+                        vscode.commands.executeCommand('etl-code.nodeDetails.focus');
+                        break;
+
+                    case 'nodeDataUpdated':
+                        if (CanvasPanel.onNodeUpdated) {
+                            CanvasPanel.onNodeUpdated(message.nodeData);
+                        }
+                        break;
+
+                    case 'nodesDeleted':
+                        if (CanvasPanel.onNodesDeleted) {
+                            CanvasPanel.onNodesDeleted(message.nodeIds || []);
+                        }
+                        break;
+
+                    case 'workflowExported': {
+                        const doc = await vscode.workspace.openTextDocument({
+                            content: message.prompt,
+                            language: 'markdown'
+                        });
+                        await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
+                        vscode.window.showInformationMessage('Workflow exported successfully!');
+                        break;
+                    }
+
+                    case 'deleteNode':
+                        // Relay the delete message back to the webview React state
+                        this.postMessage(message);
+                        break;
+                }
+            },
+            undefined,
+            this._disposables
+        );
     }
 
     public dispose() {
         CanvasPanel.currentPanel = undefined;
-
         this._panel.dispose();
 
         while (this._disposables.length) {
@@ -71,45 +117,32 @@ export class CanvasPanel {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {
-        // Path to compiled JS and CSS
-        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview.js'));
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'dist', 'index.js'));
         const stylesUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview.css'));
-
-        // Use a nonce to only allow specific scripts to be run
         const nonce = getNonce();
 
         return `<!DOCTYPE html>
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
-                <!--
-                    Use a content security policy to only allow loading images from https or from our extension directory,
-                    and only allow scripts that have a specific nonce.
-                -->
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data:; font-src ${webview.cspSource} data:; script-src 'nonce-${nonce}' 'unsafe-eval';">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https://cdnjs.cloudflare.com; img-src ${webview.cspSource} https: data:; font-src ${webview.cspSource} data: https://cdnjs.cloudflare.com; script-src 'nonce-${nonce}' 'unsafe-eval';">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <link href="${stylesUri}" rel="stylesheet">
+                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
                 <title>ETL Canvas</title>
                 <style>
                   body, html {
-                    margin: 0;
-                    padding: 0;
-                    height: 100vh;
-                    width: 100vw;
-                    overflow: hidden;
+                    margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden;
                     background-color: var(--vscode-editor-background);
                     color: var(--vscode-editor-foreground);
                   }
-                  #root {
-                    height: 100%;
-                    width: 100%;
-                  }
+                  #root { height: 100%; width: 100%; }
                 </style>
             </head>
             <body>
                 <div id="root"></div>
                 <script nonce="${nonce}">
-                    const vscode = acquireVsCodeApi();
+                    window.vscode = acquireVsCodeApi();
                 </script>
                 <script nonce="${nonce}" src="${scriptUri}"></script>
             </body>

@@ -4,15 +4,38 @@ import { CanvasPanel } from './CanvasPanel';
 export class NodeSidebarProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'etl-code.nodeSidebar';
     private _view?: vscode.WebviewView;
+    private _disposables: vscode.Disposable[] = [];
 
-    constructor(private readonly _extensionUri: vscode.Uri) {}
+    constructor(
+        private readonly _extensionUri: vscode.Uri,
+        private readonly _onDidOpen?: () => void
+    ) { }
 
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken
     ) {
+        this._disposables.forEach(disposable => disposable.dispose());
+        this._disposables = [];
         this._view = webviewView;
+        this._onDidOpen?.();
+
+        this._disposables.push(
+            webviewView.onDidChangeVisibility(() => {
+                if (webviewView.visible) {
+                    this._onDidOpen?.();
+                }
+            })
+        );
+
+        this._disposables.push(
+            webviewView.onDidDispose(() => {
+                this._disposables.forEach(disposable => disposable.dispose());
+                this._disposables = [];
+                this._view = undefined;
+            })
+        );
 
         webviewView.webview.options = {
             enableScripts: true,
@@ -21,13 +44,14 @@ export class NodeSidebarProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-        webviewView.webview.onDidReceiveMessage(data => {
+        webviewView.webview.onDidReceiveMessage((data) => {
             switch (data.type) {
                 case 'addNode':
                     if (CanvasPanel.currentPanel) {
                         CanvasPanel.currentPanel.postMessage({
                             type: 'addNode',
-                            nodeType: data.nodeType
+                            nodeType: data.nodeType,
+                            subType: data.subType
                         });
                     } else {
                         vscode.window.showInformationMessage('Please open the ETL Canvas first!');
@@ -38,63 +62,36 @@ export class NodeSidebarProvider implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'dist', 'Sidebar.js'));
+        const stylesUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview.css'));
+        const nonce = getNonce();
+
         return `<!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>ETL Nodes</title>
-                <style>
-                    body {
-                        font-family: var(--vscode-font-family);
-                        color: var(--vscode-foreground);
-                        padding: 10px;
-                    }
-                    .node-btn {
-                        display: flex;
-                        align-items: center;
-                        gap: 8px;
-                        width: 100%;
-                        padding: 10px;
-                        margin-bottom: 10px;
-                        border: 1px solid var(--vscode-button-secondaryBorder, #444);
-                        background-color: var(--vscode-button-secondaryBackground, #333);
-                        color: var(--vscode-button-secondaryForeground, #fff);
-                        border-radius: 4px;
-                        cursor: pointer;
-                        text-align: left;
-                        font-size: 13px;
-                    }
-                    .node-btn:hover {
-                        background-color: var(--vscode-button-secondaryHoverBackground, #444);
-                    }
-                    .icon {
-                        font-size: 16px;
-                    }
-                </style>
-            </head>
-            <body>
-                <button class="node-btn" onclick="addNode('source')">
-                    <span class="icon">📥</span> Source Node
-                </button>
-                <button class="node-btn" onclick="addNode('transformer')">
-                    <span class="icon">⚙️</span> Transformer Node
-                </button>
-                <button class="node-btn" onclick="addNode('target')">
-                    <span class="icon">📤</span> Target Node
-                </button>
-
-                <script>
-                    const vscode = acquireVsCodeApi();
-
-                    function addNode(type) {
-                        vscode.postMessage({
-                            type: 'addNode',
-                            nodeType: type
-                        });
-                    }
-                </script>
-            </body>
-            </html>`;
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https://cdnjs.cloudflare.com; img-src ${webview.cspSource} https: data:; font-src ${webview.cspSource} data: https://cdnjs.cloudflare.com; script-src 'nonce-${nonce}' 'unsafe-eval';">
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+            <link href="${stylesUri}" rel="stylesheet">
+            <title>ETL Nodes</title>
+            <style>
+                body { padding: 0; margin: 0; background-color: var(--vscode-sideBar-background); }
+            </style>
+        </head>
+        <body>
+            <div id="root"></div>
+            <script nonce="${nonce}" src="${scriptUri}"></script>
+        </body>
+        </html>`;
     }
+}
+
+function getNonce() {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
 }

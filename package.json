@@ -37,6 +37,11 @@
           "type": "webview",
           "id": "etl-code.nodeSidebar",
           "name": "Nodes"
+        },
+        {
+          "type": "webview",
+          "id": "etl-code.nodeDetails",
+          "name": "Node Details"
         }
       ]
     }

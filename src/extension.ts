@@ -1,35 +1,57 @@
 import * as vscode from 'vscode';
 import { CanvasPanel } from './CanvasPanel';
 import { NodeSidebarProvider } from './NodeSidebarProvider';
+import { NodeDetailsProvider } from './NodeDetailsProvider';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+    console.log('ETL Code extension is now active');
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "etl-code" is now active!');
+    // 1. Initialize Providers
+    const nodeSidebarProvider = new NodeSidebarProvider(context.extensionUri, () => {
+        CanvasPanel.createOrShow(context.extensionUri);
+    });
+    const nodeDetailsProvider = new NodeDetailsProvider(context.extensionUri);
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('etl-code.helloWorld', () => {
-		vscode.window.showInformationMessage('Hello World from etl-code!');
-	});
+    // 2. Hook up cross-provider communication (Event-Driven)
+    // This allows CanvasPanel to talk to NodeDetailsProvider without circular imports
+    CanvasPanel.onNodeSelected = (nodeData) => {
+        nodeDetailsProvider.updateDetails(nodeData);
+    };
 
-	const canvasCommand = vscode.commands.registerCommand('etl-code.openCanvas', () => {
-		CanvasPanel.createOrShow(context.extensionUri);
-		vscode.commands.executeCommand('etl-code.nodeSidebar.focus');
-	});
+    CanvasPanel.onNodeUpdated = (nodeData) => {
+        nodeDetailsProvider.updateDetails(nodeData);
+    };
 
-	const sidebarProvider = new NodeSidebarProvider(context.extensionUri);
-	const sidebarRegistration = vscode.window.registerWebviewViewProvider(
-		NodeSidebarProvider.viewType,
-		sidebarProvider
-	);
+    CanvasPanel.onNodesDeleted = (nodeIds) => {
+        nodeDetailsProvider.clearDetailsForNodes(nodeIds);
+    };
 
-	context.subscriptions.push(disposable, canvasCommand, sidebarRegistration);
+    // 3. Register WebviewViewProviders (Sidebar)
+    const sidebarRegistration = vscode.window.registerWebviewViewProvider(
+        NodeSidebarProvider.viewType,
+        nodeSidebarProvider
+    );
+
+    const detailsRegistration = vscode.window.registerWebviewViewProvider(
+        NodeDetailsProvider.viewType,
+        nodeDetailsProvider
+    );
+
+    // 4. Register Commands
+    const canvasCommand = vscode.commands.registerCommand('etl-code.openCanvas', () => {
+        CanvasPanel.createOrShow(context.extensionUri);
+    });
+
+    const helloWorldCommand = vscode.commands.registerCommand('etl-code.helloWorld', () => {
+        vscode.window.showInformationMessage('Hello World from etl-code!');
+    });
+
+    context.subscriptions.push(
+        sidebarRegistration, 
+        detailsRegistration, 
+        canvasCommand, 
+        helloWorldCommand
+    );
 }
 
-// This method is called when your extension is deactivated
 export function deactivate() {}
