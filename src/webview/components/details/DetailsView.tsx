@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { TransformOperation } from '../../types/nodes';
+import { TransformerConfigPanel } from './TransformerConfigPanel';
 
 // acquireVsCodeApi can only be called once per webview lifetime
 const vscode = (window as any).acquireVsCodeApi();
@@ -71,6 +73,14 @@ const DetailsView = () => {
   const updateLocalConfig = (cfgKey: string, value: any) => {
     setLocalData((prev: any) => {
       const nextConfig = { ...(prev.config || {}), [cfgKey]: value };
+      const nextData = { ...prev, config: nextConfig };
+      debouncedSend({ config: nextConfig });
+      return nextData;
+    });
+  };
+
+  const replaceLocalConfig = (nextConfig: Record<string, string | number>) => {
+    setLocalData((prev: any) => {
       const nextData = { ...prev, config: nextConfig };
       debouncedSend({ config: nextConfig });
       return nextData;
@@ -170,18 +180,29 @@ const DetailsView = () => {
       {/* Configuration */}
       <div style={{ borderTop: '1px solid var(--vscode-widget-border)', paddingTop: '12px' }}>
         <label style={{ ...fieldLabel, marginBottom: '8px', display: 'block' }}>Configuration</label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {Object.entries(config).map(([cfgKey, cfgValue]) => (
-            <ConfigField
-              key={cfgKey}
-              fieldKey={cfgKey}
-              fieldValue={cfgValue}
-              onEditStart={() => { isEditing.current = true; }}
-              onEditEnd={() => { isEditing.current = false; }}
-              onValueChange={(val) => updateLocalConfig(cfgKey, val)}
-            />
-          ))}
-        </div>
+        {type === 'transformer' ? (
+          <TransformerConfigPanel
+            operation={subTypeValue as TransformOperation}
+            config={config}
+            inputFields={displayFields}
+            onEditStart={() => { isEditing.current = true; }}
+            onEditEnd={() => { isEditing.current = false; }}
+            onConfigChange={replaceLocalConfig}
+          />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {Object.entries(config).map(([cfgKey, cfgValue]) => (
+              <ConfigField
+                key={cfgKey}
+                fieldKey={cfgKey}
+                fieldValue={cfgValue}
+                onEditStart={() => { isEditing.current = true; }}
+                onEditEnd={() => { isEditing.current = false; }}
+                onValueChange={(val) => updateLocalConfig(cfgKey, val)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Fetch Schema */}
@@ -197,11 +218,26 @@ const DetailsView = () => {
       {/* Schema Fields */}
       <div style={{ borderTop: '1px solid var(--vscode-widget-border)', paddingTop: '12px' }}>
         <label style={{ ...fieldLabel, marginBottom: '8px', display: 'block' }}>
-          {type === 'system' ? 'Generated Fields' : 'Schema Fields'} ({displayFields.length})
+          {type === 'system'
+            ? 'Generated Fields'
+            : type === 'transformer'
+              ? 'Input Fields'
+              : 'Schema Fields'} ({displayFields.length})
         </label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {displayFields.length > 0 ? displayFields.map((f: any) => (
-            <div key={f.id} style={fieldRow}>
+            <div
+              key={f.id}
+              style={{
+                ...fieldRow,
+                ...(type === 'transformer' ? { cursor: 'grab' } : {})
+              }}
+              draggable={type === 'transformer'}
+              onDragStart={(event) => {
+                event.dataTransfer.setData('application/etl-field-id', f.id);
+                event.dataTransfer.effectAllowed = 'copy';
+              }}
+            >
               <span style={{ fontWeight: 600, fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '9px', color: 'var(--vscode-descriptionForeground)', textTransform: 'uppercase', fontFamily: 'monospace' }}>{f.type}</span>

@@ -32,6 +32,7 @@ import {
   Field
 } from './types/nodes';
 import { createSystemNodeData, syncSystemOutputFieldName } from './utils/systemNode';
+import { getDefaultTransformConfig } from './utils/transformConfig';
 
 const initialNodes: any[] = [];
 const initialEdges: any[] = [];
@@ -467,48 +468,7 @@ ${JSON.stringify(workflow, null, 2)}
 
         // TRANSFORMER
         else if (type === 'transformer') {
-
-          let config: any = {};
-
-          switch (subType) {
-
-            case 'filter':
-              config = {
-                condition: ''
-              };
-              break;
-
-            case 'aggregate':
-              config = {
-                groupBy: '',
-                aggregations: ''
-              };
-              break;
-
-            case 'sort':
-              config = {
-                column: '',
-                order: 'asc'
-              };
-              break;
-
-            case 'join':
-              config = {
-                joinType: 'inner',
-                leftKey: '',
-                rightKey: ''
-              };
-              break;
-
-            case 'map':
-              config = {
-                expression: ''
-              };
-              break;
-
-            default:
-              config = {};
-          }
+          const config = getDefaultTransformConfig(subType as TransformOperation);
 
           data = {
             label: `New ${subType.toUpperCase()}`,
