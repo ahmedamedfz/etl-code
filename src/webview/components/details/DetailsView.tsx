@@ -78,7 +78,7 @@ const DetailsView = () => {
   };
 
   const deleteField = (fieldId: string) => {
-    const fieldKey = type === 'source' ? 'outputFields' : 'inputFields';
+    const fieldKey = type === 'source' || type === 'system' ? 'outputFields' : 'inputFields';
     const currentFields = localData[fieldKey] || nodeData.data?.[fieldKey] || [];
     const nextFields = currentFields.filter((field: any) => field.id !== fieldId);
     const patch = { [fieldKey]: nextFields };
@@ -116,9 +116,27 @@ const DetailsView = () => {
   }
 
   const { id, type } = nodeData;
-  const subTypeKey = type === 'source' ? 'sourceType' : (type === 'transformer' ? 'operation' : 'targetType');
+  const subTypeKey =
+    type === 'source'
+      ? 'sourceType'
+      : type === 'transformer'
+        ? 'operation'
+        : type === 'system'
+          ? 'systemType'
+          : 'targetType';
+  const subTypeLabel =
+    type === 'source'
+      ? 'Source Type'
+      : type === 'transformer'
+        ? 'Operation'
+        : type === 'system'
+          ? 'Generator'
+          : 'Target Type';
   const subTypeValue = localData[subTypeKey] || '';
-  const displayFields: any[] = type === 'source' ? (localData.outputFields || nodeData.data?.outputFields || []) : (localData.inputFields || nodeData.data?.inputFields || []);
+  const displayFields: any[] =
+    type === 'source' || type === 'system'
+      ? (localData.outputFields || nodeData.data?.outputFields || [])
+      : (localData.inputFields || nodeData.data?.inputFields || []);
   const config = localData.config || {};
 
   return (
@@ -145,7 +163,7 @@ const DetailsView = () => {
 
       {/* Sub-type */}
       <div style={fieldGroup}>
-        <label style={fieldLabel}>{type === 'source' ? 'Source Type' : type === 'transformer' ? 'Operation' : 'Target Type'}</label>
+        <label style={fieldLabel}>{subTypeLabel}</label>
         <div style={{ ...readonlyBox, color: '#f59e0b', fontWeight: 'bold', textTransform: 'uppercase' }}>{subTypeValue}</div>
       </div>
 
@@ -179,7 +197,7 @@ const DetailsView = () => {
       {/* Schema Fields */}
       <div style={{ borderTop: '1px solid var(--vscode-widget-border)', paddingTop: '12px' }}>
         <label style={{ ...fieldLabel, marginBottom: '8px', display: 'block' }}>
-          Schema Fields ({displayFields.length})
+          {type === 'system' ? 'Generated Fields' : 'Schema Fields'} ({displayFields.length})
         </label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {displayFields.length > 0 ? displayFields.map((f: any) => (
@@ -187,13 +205,15 @@ const DetailsView = () => {
               <span style={{ fontWeight: 600, fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '9px', color: 'var(--vscode-descriptionForeground)', textTransform: 'uppercase', fontFamily: 'monospace' }}>{f.type}</span>
-                <button
-                  onClick={() => deleteField(f.id)}
-                  style={iconButton}
-                  title="Delete field"
-                >
-                  <i className="fa-solid fa-trash-can"></i>
-                </button>
+                {type !== 'system' && (
+                  <button
+                    onClick={() => deleteField(f.id)}
+                    style={iconButton}
+                    title="Delete field"
+                  >
+                    <i className="fa-solid fa-trash-can"></i>
+                  </button>
+                )}
               </div>
             </div>
           )) : (

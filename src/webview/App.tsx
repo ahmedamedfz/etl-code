@@ -24,11 +24,14 @@ import {
   SourceNodeData,
   TransformerNodeData,
   TargetNodeData,
+  SystemNodeData,
   SourceType,
   TransformOperation,
   TargetType,
+  SystemGeneratorType,
   Field
 } from './types/nodes';
+import { createSystemNodeData, syncSystemOutputFieldName } from './utils/systemNode';
 
 const initialNodes: any[] = [];
 const initialEdges: any[] = [];
@@ -38,7 +41,7 @@ let id = 0;
 const getId = () => `node_${id++}`;
 
 const getNodeOutputFields = (node: any): Field[] => {
-  if (node.type === 'source' || node.type === 'transformer') {
+  if (node.type === 'source' || node.type === 'transformer' || node.type === 'system') {
     return node.data.outputFields || [];
   }
 
@@ -65,6 +68,31 @@ const findOutputField = (node: any, handleId?: string | null) => {
   }
 
   return getNodeOutputFields(node).find((field) => field.id === fieldId) || null;
+};
+
+const getTargetFieldsToMerge = (
+  targetNode: any,
+  targetHandleId: string | null | undefined,
+  fieldsToPropagate: Field[]
+) => {
+  if (targetNode.type !== 'target') {
+    return fieldsToPropagate;
+  }
+
+  const isNodeTarget = !targetHandleId || targetHandleId === 'node-target';
+
+  if (isNodeTarget) {
+    return fieldsToPropagate;
+  }
+
+  const targetFieldId = getHandleFieldId(targetHandleId);
+  const currentInputFields: Field[] = targetNode.data.inputFields || [];
+
+  if (targetFieldId && currentInputFields.some((field) => field.id === targetFieldId)) {
+    return [];
+  }
+
+  return fieldsToPropagate;
 };
 
 const deriveTransformerOutputFields = (operation: TransformOperation, inputFields: Field[]) => {
@@ -179,17 +207,23 @@ function AppContent() {
       (sourceNode.type === 'transformer' && sourceHandle === 'node-source');
     const isTargetPort =
       targetHandle?.startsWith('input-') ||
-      (targetNode.type === 'transformer' && targetHandle === 'node-target');
+      (
+        (targetNode.type === 'transformer' || targetNode.type === 'target') &&
+        targetHandle === 'node-target'
+      );
 
     if (!isSourcePort || !isTargetPort) {
       return false;
     }
 
-    if (sourceNode.type === 'target' || targetNode.type === 'source') {
+    if (sourceNode.type === 'target' || targetNode.type === 'source' || targetNode.type === 'system') {
       return false;
     }
 
-    if (sourceNode.type === 'source' && targetNode.type === 'source') {
+    if (
+      (sourceNode.type === 'source' || sourceNode.type === 'system') &&
+      (targetNode.type === 'source' || targetNode.type === 'system')
+    ) {
       return false;
     }
 
@@ -255,11 +289,11 @@ function AppContent() {
           return node;
         }
 
-        // Merge fields into target inputFields
         const currentInputFields = node.data.inputFields || [];
         const newInputFields = [...currentInputFields];
-        
-        fieldsToPropagate.forEach((pf: Field) => {
+        const fieldsToMerge = getTargetFieldsToMerge(node, targetHandleId, fieldsToPropagate);
+
+        fieldsToMerge.forEach((pf: Field) => {
           if (!newInputFields.find((f: Field) => f.id === pf.id)) {
             newInputFields.push(pf);
           }
@@ -492,6 +526,11 @@ ${JSON.stringify(workflow, null, 2)}
           } as TransformerNodeData;
         }
 
+        // SYSTEM
+        else if (type === 'system') {
+          data = createSystemNodeData(subType as SystemGeneratorType);
+        }
+
         // TARGET
         else {
 
@@ -572,7 +611,8 @@ ${JSON.stringify(workflow, null, 2)}
                 const isSubTypeChange =
                   message.data.sourceType ||
                   message.data.operation ||
-                  message.data.targetType;
+                  message.data.targetType ||
+                  message.data.systemType;
 
                 if (!isSubTypeChange) {
                   newData.config = {
@@ -591,6 +631,13 @@ ${JSON.stringify(workflow, null, 2)}
                 );
               }
 
+              if (node.type === 'system' && newData.config?.fieldName) {
+                newData.outputFields = syncSystemOutputFieldName(
+                  newData as SystemNodeData,
+                  String(newData.config.fieldName)
+                ).outputFields;
+              }
+
               return {
                 ...node,
                 data: newData
@@ -603,7 +650,8 @@ ${JSON.stringify(workflow, null, 2)}
           const isSubTypeChange =
             message.data.sourceType ||
             message.data.operation ||
-            message.data.targetType;
+            message.data.targetType ||
+            message.data.systemType;
 
           const updatedNode = updatedNodes.find(
             n => n.id === message.nodeId

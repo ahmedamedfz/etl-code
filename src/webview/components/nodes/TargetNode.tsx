@@ -36,6 +36,13 @@ export const TargetNode = memo(({ id, data }: { id: string, data: TargetNodeData
 
   return (
     <div className="relative bg-white dark:bg-gray-900 border-2 border-green-500 rounded-lg shadow-xl min-w-[260px] overflow-visible">
+      {/* <Handle
+        type="target"
+        position={Position.Top}
+        id="node-target"
+        className="etl-node-handle etl-node-handle-add !bg-green-600"
+        style={{ left: 'calc(50% - 98px)', top: 49 }}
+      /> */}
       <NodeHeader 
         label={data.label}
         type="Target"
