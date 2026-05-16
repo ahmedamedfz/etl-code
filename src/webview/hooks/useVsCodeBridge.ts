@@ -4,6 +4,12 @@ import { createNodeData } from '../utils/createNodeData';
 import { getNodeId } from '../utils/nodeId';
 import { mergeNodeData, isSubTypeChange, pruneInvalidEdges } from '../utils/updateNode';
 import { getVsCodeApi, postToExtension } from '../utils/vscodeBridge';
+import {
+  serializeFullWorkflow,
+  serializePromptWorkflow,
+  deserializeWorkflow,
+  buildMcpPrompt,
+} from '../utils/workflowSerialization';
 
 type SetNodes = Dispatch<SetStateAction<any[]>>;
 type SetEdges = Dispatch<SetStateAction<any[]>>;
@@ -21,27 +27,32 @@ export const useVsCodeBridge = (
 ) => {
   const { setCenter, getNodes, getEdges } = useReactFlow();
 
-  const exportWorkflow = useCallback(() => {
-    return {
-      nodes: getNodes(),
-      edges: getEdges(),
-    };
+  const exportFull = useCallback(() => {
+    return serializeFullWorkflow(getNodes(), getEdges());
   }, [getNodes, getEdges]);
 
-  const generateWorkflowPrompt = useCallback(() => {
-    const workflow = exportWorkflow();
+  const exportPrompt = useCallback(() => {
+    return serializePromptWorkflow(getNodes(), getEdges());
+  }, [getNodes, getEdges]);
 
-    const prompt = `Generate Python Pandas ETL pipeline from this workflow:
+  const applyImportedWorkflow = useCallback(
+    (workflowInput: unknown) => {
+      const { nodes, edges } = deserializeWorkflow(workflowInput);
+      setNodes(nodes);
+      setEdges(edges);
 
-${JSON.stringify(workflow, null, 2)}
-`;
-
-    postToExtension({
-      type: 'workflowExported',
-      workflow,
-      prompt
-    });
-  }, [exportWorkflow]);
+      if (nodes.length > 0) {
+        const first = nodes[0];
+        setTimeout(() => {
+          setCenter(first.position.x + 75, first.position.y + 25, {
+            zoom: 1,
+            duration: 600,
+          });
+        }, 50);
+      }
+    },
+    [setNodes, setEdges, setCenter]
+  );
 
   useEffect(() => {
     (window as Window & { deleteEtlNode?: (nodeId: string) => void }).deleteEtlNode = (nodeId: string) => {
@@ -82,7 +93,7 @@ ${JSON.stringify(workflow, null, 2)}
         setTimeout(() => {
           setCenter(x + 75, y + 25, {
             zoom: 1.2,
-            duration: 800
+            duration: 800,
           });
         }, 50);
       } else if (message.type === 'updateNode') {
@@ -91,7 +102,7 @@ ${JSON.stringify(workflow, null, 2)}
             if (node.id === message.nodeId) {
               return {
                 ...node,
-                data: mergeNodeData(node, message.data)
+                data: mergeNodeData(node, message.data),
               };
             }
 
@@ -99,14 +110,10 @@ ${JSON.stringify(workflow, null, 2)}
           });
 
           const subTypeChanged = isSubTypeChange(message.data);
-          const updatedNode = updatedNodes.find(
-            n => n.id === message.nodeId
-          );
+          const updatedNode = updatedNodes.find((n) => n.id === message.nodeId);
 
           if (updatedNode && (message.data.inputFields || message.data.outputFields)) {
-            setEdges((eds) =>
-              pruneInvalidEdges(eds, message.nodeId, updatedNode)
-            );
+            setEdges((eds) => pruneInvalidEdges(eds, message.nodeId, updatedNode));
           }
 
           if (updatedNode && getVsCodeApi()) {
@@ -118,8 +125,8 @@ ${JSON.stringify(workflow, null, 2)}
                   type: updatedNode.type,
                   position: updatedNode.position,
                   data: updatedNode.data,
-                  activeConnections: []
-                }
+                  activeConnections: [],
+                },
               });
             }, 0);
           }
@@ -133,8 +140,8 @@ ${JSON.stringify(workflow, null, 2)}
                   type: updatedNode.type,
                   position: updatedNode.position,
                   data: updatedNode.data,
-                  activeConnections: []
-                }
+                  activeConnections: [],
+                },
               });
             }, 0);
           }
@@ -144,7 +151,35 @@ ${JSON.stringify(workflow, null, 2)}
       } else if (message.type === 'deleteNode') {
         deleteNodesById([message.nodeId]);
       } else if (message.type === 'exportWorkflow') {
-        generateWorkflowPrompt();
+        const workflow = exportFull();
+        postToExtension({
+          type: 'workflowExported',
+          exportKind: 'full',
+          workflow,
+          content: JSON.stringify(workflow, null, 2),
+        });
+      } else if (message.type === 'exportWorkflowPrompt') {
+        const workflow = exportPrompt();
+        postToExtension({
+          type: 'workflowExported',
+          exportKind: 'prompt',
+          workflow,
+          content: buildMcpPrompt(workflow),
+        });
+      } else if (message.type === 'importWorkflow') {
+        try {
+          const imported = deserializeWorkflow(message.workflow);
+          applyImportedWorkflow(message.workflow);
+          postToExtension({
+            type: 'workflowImported',
+            nodeCount: imported.nodes.length,
+          });
+        } catch (error: unknown) {
+          postToExtension({
+            type: 'workflowImportFailed',
+            message: error instanceof Error ? error.message : 'Import failed',
+          });
+        }
       }
     };
 
@@ -162,7 +197,9 @@ ${JSON.stringify(workflow, null, 2)}
     setEdges,
     setCenter,
     getNodes,
-    generateWorkflowPrompt,
-    prepareConnection
+    exportFull,
+    exportPrompt,
+    applyImportedWorkflow,
+    prepareConnection,
   ]);
 };

@@ -74,14 +74,40 @@ export class CanvasPanel {
                         break;
 
                     case 'workflowExported': {
+                        const isPrompt = message.exportKind === 'prompt';
                         const doc = await vscode.workspace.openTextDocument({
-                            content: message.prompt,
-                            language: 'markdown'
+                            content: message.content,
+                            language: isPrompt ? 'markdown' : 'json'
                         });
                         await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
-                        vscode.window.showInformationMessage('Workflow exported successfully!');
+                        vscode.window.showInformationMessage(
+                            isPrompt
+                                ? 'MCP prompt workflow exported.'
+                                : 'Full workflow JSON exported.'
+                        );
                         break;
                     }
+
+                    case 'workflowImported': {
+                        vscode.window.showInformationMessage(
+                            `Workflow imported (${message.nodeCount ?? 0} nodes).`
+                        );
+                        break;
+                    }
+
+                    case 'workflowImportFailed': {
+                        vscode.window.showErrorMessage(`Workflow import failed: ${message.message}`);
+                        break;
+                    }
+
+                    case 'importWorkflow':
+                        this.postMessage(message);
+                        break;
+
+                    case 'exportWorkflow':
+                    case 'exportWorkflowPrompt':
+                        this.postMessage(message);
+                        break;
 
                     case 'deleteNode':
                         // Relay the delete message back to the webview React state

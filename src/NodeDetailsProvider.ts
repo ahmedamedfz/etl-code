@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { CanvasPanel } from './CanvasPanel';
 import { SchemaFetcher } from './services/SchemaFetcher';
+import { WorkflowFileService } from './services/WorkflowFileService';
 
 export class NodeDetailsProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'etl-code.nodeDetails';
@@ -39,19 +40,79 @@ export class NodeDetailsProvider implements vscode.WebviewViewProvider {
                 case 'fetchSchema':
                     this._handleFetchSchema(data.nodeId, data.nodeType, data.subType, data.config);
                     break;
-                case 'exportWorkflow': {
+                case 'pickFile':
+                    void this._handlePickFile(data);
+                    break;
+                case 'exportWorkflow':
+                case 'exportWorkflowPrompt':
                     if (CanvasPanel.currentPanel) {
-                        CanvasPanel.currentPanel.postMessage({
-                            type: 'exportWorkflow'
-                        });
+                        CanvasPanel.currentPanel.postMessage({ type: data.type });
+                    } else {
+                        vscode.window.showWarningMessage('Open the ETL Canvas before exporting a workflow.');
                     }
                     break;
-                }
+                case 'importWorkflow':
+                    if (CanvasPanel.currentPanel) {
+                        CanvasPanel.currentPanel.postMessage({
+                            type: 'importWorkflow',
+                            workflow: data.workflow
+                        });
+                    } else {
+                        vscode.window.showWarningMessage('Open the ETL Canvas before importing a workflow.');
+                    }
+                    break;
+                case 'importWorkflowFromFile':
+                    void this._handleImportFromFile();
+                    break;
             }
         });
 
         if (this._selectedNodeData) {
             this.updateDetails(this._selectedNodeData);
+        }
+    }
+
+    private async _handlePickFile(data: {
+        nodeId?: string;
+        configKey: string;
+        title?: string;
+        extensions?: string[];
+    }) {
+        const filePath = await WorkflowFileService.pickFile(data.title, data.extensions);
+        if (!filePath || !this._view) {
+            return;
+        }
+
+        if (data.nodeId) {
+            const patch = { config: { [data.configKey]: filePath } };
+            this._applyNodePatch(data.nodeId, patch);
+            CanvasPanel.currentPanel?.postMessage({
+                type: 'updateNode',
+                nodeId: data.nodeId,
+                data: patch
+            });
+        }
+    }
+
+    private async _handleImportFromFile() {
+        try {
+            const workflow = await WorkflowFileService.readWorkflowJsonFile();
+            if (!workflow) {
+                return;
+            }
+
+            if (!CanvasPanel.currentPanel) {
+                vscode.window.showWarningMessage('Open the ETL Canvas before importing a workflow.');
+                return;
+            }
+
+            CanvasPanel.currentPanel.postMessage({
+                type: 'importWorkflow',
+                workflow
+            });
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Failed to read workflow file';
+            vscode.window.showErrorMessage(`Import failed: ${message}`);
         }
     }
 
@@ -65,7 +126,7 @@ export class NodeDetailsProvider implements vscode.WebviewViewProvider {
             if (subType === 'csv' || subType === 'excel') {
                 const filePath = config.filePath;
                 if (!filePath) {
-                    throw new Error('File Path is required to fetch schema');
+                    throw new Error('File path is required to fetch schema');
                 }
                 const delimiter = config.delimiter || ',';
                 const skipRows = Number(config.skipRows) || 0;
@@ -74,7 +135,7 @@ export class NodeDetailsProvider implements vscode.WebviewViewProvider {
                 const dbPath = config.connectionString;
                 const tableName = config.table;
                 if (!dbPath || !tableName) {
-                    throw new Error('Connection String and Table Name are required');
+                    throw new Error('Database path / connection and table name are required');
                 }
                 fields = await SchemaFetcher.fetchSqliteSchema(dbPath, tableName);
             } else if (subType === 'rest-api') {
@@ -111,7 +172,6 @@ export class NodeDetailsProvider implements vscode.WebviewViewProvider {
         if (!this._view) {
             return;
         }
-        // Send message to React app
         this._view.webview.postMessage({
             type: 'updateDetails',
             nodeData
