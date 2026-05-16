@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "etl-code": {
+      "command": "node",
+      "args": [
+        "${workspaceFolder}/dist/mcp/server-entry.js"
+      ],
+      "env": {},
+      "disabled": false
+    }
+  }
+}

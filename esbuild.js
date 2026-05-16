@@ -37,10 +37,27 @@ async function main() {
 		sourcesContent: false,
 		platform: 'node',
 		outfile: 'dist/extension.js',
-		external: ['vscode'],
+		external: ['vscode', 'sqlite3', 'pg'],
 		logLevel: 'silent',
 		plugins: [
-			/* add to the end of plugins array */
+			esbuildProblemMatcherPlugin,
+		],
+	});
+
+	const mcpCtx = await esbuild.context({
+		entryPoints: [
+			'src/mcp/server-entry.ts'
+		],
+		bundle: true,
+		format: 'cjs',
+		minify: production,
+		sourcemap: !production,
+		sourcesContent: false,
+		platform: 'node',
+		outfile: 'dist/mcp/server-entry.js',
+		external: ['vscode', 'sqlite3', 'pg'],
+		logLevel: 'silent',
+		plugins: [
 			esbuildProblemMatcherPlugin,
 		],
 	});
@@ -70,11 +87,14 @@ async function main() {
 
 	if (watch) {
 		await extensionCtx.watch();
+		await mcpCtx.watch();
 		await webviewCtx.watch();
 	} else {
 		await extensionCtx.rebuild();
+		await mcpCtx.rebuild();
 		await webviewCtx.rebuild();
 		await extensionCtx.dispose();
+		await mcpCtx.dispose();
 		await webviewCtx.dispose();
 	}
 }
