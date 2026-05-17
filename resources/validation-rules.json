@@ -1,0 +1,49 @@
+{
+  "graphValidation": [
+    {"rule": "NO_CYCLES", "description": "Graph must be acyclic (DAG)", "severity": "error", "code": "GRAPH_001"},
+    {"rule": "CONNECTED_COMPONENTS", "description": "All nodes should be reachable", "severity": "warning", "code": "GRAPH_002"},
+    {"rule": "SOURCE_FIRST", "description": "Source nodes must have no incoming edges", "severity": "error", "code": "GRAPH_003"},
+    {"rule": "TARGET_LAST", "description": "Target nodes must have no outgoing edges", "severity": "error", "code": "GRAPH_004"},
+    {"rule": "SYSTEM_NO_INPUT", "description": "System nodes cannot receive input", "severity": "error", "code": "GRAPH_005"},
+    {"rule": "MIN_ONE_SOURCE", "description": "At least one source or system node required", "severity": "error", "code": "GRAPH_006"},
+    {"rule": "MIN_ONE_TARGET", "description": "At least one target node recommended", "severity": "warning", "code": "GRAPH_007"}
+  ],
+  "nodeValidation": [
+    {"rule": "REQUIRED_PROPERTIES", "description": "Node must have id, type, and data", "severity": "error", "code": "NODE_001"},
+    {"rule": "VALID_NODE_TYPE", "description": "Node type must be source|transformer|target|system", "severity": "error", "code": "NODE_002"},
+    {"rule": "VALID_SUBTYPE", "description": "Node subtype must match allowed values", "severity": "error", "code": "NODE_003"},
+    {"rule": "REQUIRED_CONFIG", "description": "Node must have required config properties", "severity": "error", "code": "NODE_004"},
+    {"rule": "VALID_FIELDS", "description": "Fields must have id, name, and type", "severity": "error", "code": "NODE_005"},
+    {"rule": "UNIQUE_FIELD_IDS", "description": "Field IDs must be unique within node", "severity": "error", "code": "NODE_006"},
+    {"rule": "VALID_LABEL", "description": "Node must have non-empty label", "severity": "warning", "code": "NODE_007"}
+  ],
+  "edgeValidation": [
+    {"rule": "VALID_ENDPOINTS", "description": "Source and target nodes must exist", "severity": "error", "code": "EDGE_001"},
+    {"rule": "NO_SELF_LOOP", "description": "Edge cannot connect node to itself", "severity": "error", "code": "EDGE_002"},
+    {"rule": "VALID_HANDLES", "description": "Handles must reference existing fields", "severity": "error", "code": "EDGE_003"},
+    {"rule": "NO_DUPLICATES", "description": "No duplicate edges", "severity": "error", "code": "EDGE_004"},
+    {"rule": "TYPE_COMPATIBILITY", "description": "Connected fields must have compatible types", "severity": "warning", "code": "EDGE_005"},
+    {"rule": "VALID_CONNECTION_DIRECTION", "description": "Connection must follow data flow rules", "severity": "error", "code": "EDGE_006"},
+    {"rule": "SINGLE_INPUT_CONSTRAINT", "description": "Non-join/union transformers accept single input", "severity": "error", "code": "EDGE_007"}
+  ],
+  "typeValidation": [
+    {"rule": "VALID_TYPE", "description": "Field type must be recognized primitive", "severity": "error", "code": "TYPE_001"},
+    {"rule": "TYPE_COMPATIBILITY", "description": "Source and target types must be compatible", "severity": "warning", "code": "TYPE_002"},
+    {"rule": "SAFE_COERCION", "description": "Type coercion should not lose data", "severity": "warning", "code": "TYPE_003"},
+    {"rule": "NULLABLE_HANDLING", "description": "Nullable fields properly handled", "severity": "info", "code": "TYPE_004"}
+  ],
+  "expressionValidation": [
+    {"rule": "VALID_SYNTAX", "description": "Expression must follow grammar", "severity": "error", "code": "EXPR_001"},
+    {"rule": "FIELD_REFERENCES_EXIST", "description": "Referenced fields must exist in input", "severity": "error", "code": "EXPR_002"},
+    {"rule": "VALID_FUNCTIONS", "description": "Functions must be recognized", "severity": "error", "code": "EXPR_003"},
+    {"rule": "TYPE_SAFE_OPERATIONS", "description": "Operations valid for field types", "severity": "warning", "code": "EXPR_004"},
+    {"rule": "BALANCED_BRACKETS", "description": "Field references properly closed", "severity": "error", "code": "EXPR_005"}
+  ],
+  "configValidation": [
+    {"rule": "REQUIRED_FIELDS", "description": "All required config fields present", "severity": "error", "code": "CONF_001"},
+    {"rule": "VALID_VALUES", "description": "Config values match expected types", "severity": "error", "code": "CONF_002"},
+    {"rule": "ENUM_VALUES", "description": "Enum fields have valid values", "severity": "error", "code": "CONF_003"},
+    {"rule": "FILE_PATH_EXISTS", "description": "File paths should exist", "severity": "warning", "code": "CONF_004"},
+    {"rule": "CONNECTION_STRING_FORMAT", "description": "Connection strings properly formatted", "severity": "warning", "code": "CONF_005"}
+  ]
+}

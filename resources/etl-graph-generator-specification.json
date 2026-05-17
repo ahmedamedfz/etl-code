@@ -1,0 +1,127 @@
+{
+  "systemOverview": {
+    "name": "AI ETL Graph Generator",
+    "purpose": "Generate production-grade ETL workflow graphs from natural language descriptions",
+    "architecture": "Natural Language → Intent Extraction → AST → Validated Graph JSON → React Flow Visualization",
+    "version": "1.0.0",
+    "targetPlatform": "VSCode Extension with React Flow Canvas",
+    "deterministic": true,
+    "schemaConstrained": true,
+    "validationSafe": true
+  },
+  "graphArchitecture": {
+    "format": "React Flow compatible JSON",
+    "structure": {
+      "version": {"type": "number", "required": true, "default": 1},
+      "format": {"type": "string", "enum": ["full", "prompt"], "required": true},
+      "nodes": {"type": "array", "required": true},
+      "edges": {"type": "array", "required": true}
+    },
+    "topology": "Directed Acyclic Graph (DAG)",
+    "constraints": {
+      "noCycles": true,
+      "sourcesMustBeFirst": true,
+      "targetsMustBeLast": true,
+      "systemNodesCannotReceiveInput": true,
+      "targetNodesCannotProduceOutput": true
+    }
+  },
+  "nodeSystem": {
+    "nodeTypes": [
+      {
+        "type": "source",
+        "canReceiveInput": false,
+        "canProduceOutput": true,
+        "hasInputFields": false,
+        "hasOutputFields": true,
+        "requiredProperties": ["id", "type", "data"],
+        "dataProperties": ["label", "sourceType", "config", "outputFields"]
+      },
+      {
+        "type": "transformer",
+        "canReceiveInput": true,
+        "canProduceOutput": true,
+        "hasInputFields": true,
+        "hasOutputFields": true,
+        "requiredProperties": ["id", "type", "data"],
+        "dataProperties": ["label", "operation", "config", "inputFields", "outputFields", "mappings"]
+      },
+      {
+        "type": "target",
+        "canReceiveInput": true,
+        "canProduceOutput": false,
+        "hasInputFields": true,
+        "hasOutputFields": false,
+        "requiredProperties": ["id", "type", "data"],
+        "dataProperties": ["label", "targetType", "config", "inputFields"]
+      },
+      {
+        "type": "system",
+        "canReceiveInput": false,
+        "canProduceOutput": true,
+        "hasInputFields": false,
+        "hasOutputFields": true,
+        "requiredProperties": ["id", "type", "data"],
+        "dataProperties": ["label", "systemType", "config", "outputFields"]
+      }
+    ]
+  },
+  "edgeSystem": {
+    "edgeStructure": {
+      "id": {"type": "string", "required": true, "pattern": "^edge_[a-zA-Z0-9_]+$"},
+      "type": {"type": "string", "default": "smoothstep"},
+      "source": {"type": "string", "required": true},
+      "target": {"type": "string", "required": true},
+      "sourceHandle": {"type": "string", "pattern": "^(output-[a-zA-Z0-9_]+|node-source)$"},
+      "targetHandle": {"type": "string", "pattern": "^(input-[a-zA-Z0-9_]+|node-target)$"}
+    },
+    "connectionModes": [
+      {"mode": "field", "requiresHandles": true},
+      {"mode": "node", "requiresHandles": false}
+    ]
+  },
+  "typeSystem": {
+    "primitiveTypes": ["string", "integer", "float", "number", "boolean", "date", "datetime", "any"],
+    "typeCompatibility": {
+      "string": ["string", "text", "any"],
+      "integer": ["integer", "number", "float", "any"],
+      "float": ["float", "number", "any"],
+      "number": ["number", "integer", "float", "any"],
+      "boolean": ["boolean", "any"],
+      "date": ["date", "datetime", "string", "any"],
+      "datetime": ["datetime", "date", "string", "any"],
+      "any": ["any"]
+    }
+  },
+  "handleConvention": {
+    "outputHandles": {"pattern": "^output-[a-zA-Z0-9_]+$", "format": "output-{fieldId}"},
+    "inputHandles": {"pattern": "^input-[a-zA-Z0-9_]+$", "format": "input-{fieldId}"},
+    "nodeHandles": {
+      "source": {"id": "node-source"},
+      "target": {"id": "node-target"}
+    }
+  },
+  "idConvention": {
+    "nodeIds": {"pattern": "^node_\\d+$", "format": "node_{sequentialNumber}"},
+    "edgeIds": {"pattern": "^edge_[a-zA-Z0-9_]+$", "format": "edge_{source}_{sourceHandle}_{target}_{targetHandle}"},
+    "fieldIds": {
+      "column": "^col_\\d+$",
+      "sql": "^sql_col_\\d+$",
+      "aggregate": "^agg_\\d+$",
+      "output": "^out_[a-zA-Z_]+$"
+    }
+  },
+  "expressionGrammar": {
+    "fieldReference": {"syntax": "{{fieldName}}", "openToken": "{{", "closeToken": "}}"},
+    "operators": {
+      "comparison": ["==", "!=", "<", ">", "<=", ">="],
+      "logical": ["&&", "||", "!"],
+      "arithmetic": ["+", "-", "*", "/", "%"]
+    },
+    "functions": {
+      "aggregate": ["count", "sum", "avg", "min", "max"],
+      "typeConversion": ["STRING", "INT", "REAL", "DATE", "DATETIME"],
+      "string": ["concat", "lower", "upper", "trim"]
+    }
+  }
+}

@@ -5,7 +5,12 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+    CallToolRequestSchema,
+    ListToolsRequestSchema,
+    ListResourcesRequestSchema,
+    ReadResourceRequestSchema
+} from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
 import cors from "cors";
 
@@ -13,13 +18,22 @@ import { ExecutionEngine } from "../pipeline/ExecutionEngine";
 import { OracleMockConnector } from "../db/OracleMockConnector";
 import { PostgresConnector } from "../db/PostgresConnector";
 import { generateWorkflowFromDescription } from "./WorkflowGenerator";
+import { ResourceRegistry } from "../semantic/ResourceRegistry";
+import { CompilerPipeline } from "../compiler/pipeline/CompilerPipeline";
+import { ValidationEngine } from "../compiler/ValidationEngine";
 
 export class ETLMCPServer {
     private server: Server;
     private engine: ExecutionEngine;
+    private registry: ResourceRegistry;
+    private compiler: CompilerPipeline;
+    private validator: ValidationEngine;
 
     constructor() {
         this.engine = new ExecutionEngine();
+        this.registry = ResourceRegistry.getInstance();
+        this.compiler = new CompilerPipeline();
+        this.validator = new ValidationEngine();
         
         this.server = new Server(
             {
@@ -28,7 +42,8 @@ export class ETLMCPServer {
             },
             {
                 capabilities: {
-                    tools: {}
+                    tools: {},
+                    resources: {}
                 }
             }
         );
@@ -36,7 +51,106 @@ export class ETLMCPServer {
         this.setupHandlers();
     }
 
+    async initialize() {
+        await this.registry.initialize();
+    }
+
     private setupHandlers() {
+        // ── Resource Handlers ────────────────────────────────────────────────────
+        this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
+            return {
+                resources: [
+                    {
+                        uri: "etl://resources/compiler-pipeline",
+                        name: "Compiler Pipeline Specification",
+                        description: "6-stage ETL compiler pipeline definition",
+                        mimeType: "application/json"
+                    },
+                    {
+                        uri: "etl://resources/node-catalog",
+                        name: "Node Catalog",
+                        description: "Complete catalog of ETL node types (source, transformer, target, system)",
+                        mimeType: "application/json"
+                    },
+                    {
+                        uri: "etl://resources/validation-rules",
+                        name: "Validation Rules",
+                        description: "Graph validation rules for DAG, nodes, edges, types, expressions",
+                        mimeType: "application/json"
+                    },
+                    {
+                        uri: "etl://resources/propagation-rules",
+                        name: "Field Propagation Rules",
+                        description: "Rules for field propagation through transformers",
+                        mimeType: "application/json"
+                    },
+                    {
+                        uri: "etl://resources/graph-spec",
+                        name: "Graph Specification",
+                        description: "ETL graph generator specification with type system and conventions",
+                        mimeType: "application/json"
+                    },
+                    {
+                        uri: "etl://resources/prompt-templates",
+                        name: "Prompt Templates",
+                        description: "AI prompt templates for ETL compilation",
+                        mimeType: "application/json"
+                    },
+                    {
+                        uri: "etl://resources/example-patterns",
+                        name: "Example Patterns",
+                        description: "Example ETL patterns and workflows",
+                        mimeType: "application/json"
+                    }
+                ]
+            };
+        });
+
+        this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+            const uri = request.params.uri;
+            
+            try {
+                let content: any;
+                
+                switch (uri) {
+                    case "etl://resources/compiler-pipeline":
+                        content = this.registry.getCompilerPipeline();
+                        break;
+                    case "etl://resources/node-catalog":
+                        content = this.registry.getNodeCatalog();
+                        break;
+                    case "etl://resources/validation-rules":
+                        content = this.registry.getValidationRules();
+                        break;
+                    case "etl://resources/propagation-rules":
+                        content = this.registry.getPropagationRules();
+                        break;
+                    case "etl://resources/graph-spec":
+                        content = this.registry.getGraphSpec();
+                        break;
+                    case "etl://resources/prompt-templates":
+                        content = this.registry.getPromptTemplates();
+                        break;
+                    case "etl://resources/example-patterns":
+                        content = this.registry.getExamplePatterns();
+                        break;
+                    default:
+                        throw new Error(`Unknown resource: ${uri}`);
+                }
+
+                return {
+                    contents: [{
+                        uri,
+                        mimeType: "application/json",
+                        text: JSON.stringify(content, null, 2)
+                    }]
+                };
+            } catch (error: any) {
+                throw new Error(`Failed to read resource ${uri}: ${error.message}`);
+            }
+        });
+
+        // ── Tool Handlers ────────────────────────────────────────────────────────
         this.server.setRequestHandler(ListToolsRequestSchema, async () => {
             return {
                 tools: [
@@ -116,6 +230,59 @@ export class ETLMCPServer {
                                 }
                             },
                             required: ["description"]
+                        }
+                    },
+                    {
+                        name: "compile_etl",
+                        description:
+                            "Compile natural language to ETL workflow using the 6-stage compiler pipeline. " +
+                            "Returns validated workflow with semantic metadata.",
+                        inputSchema: {
+                            type: "object",
+                            properties: {
+                                naturalLanguage: {
+                                    type: "string",
+                                    description: "Natural language ETL description"
+                                }
+                            },
+                            required: ["naturalLanguage"]
+                        }
+                    },
+                    {
+                        name: "validate_graph",
+                        description:
+                            "Validate an ETL workflow graph against all validation rules. " +
+                            "Returns validation result with errors and warnings.",
+                        inputSchema: {
+                            type: "object",
+                            properties: {
+                                workflow: {
+                                    type: "object",
+                                    description: "Workflow JSON to validate"
+                                }
+                            },
+                            required: ["workflow"]
+                        }
+                    },
+                    {
+                        name: "get_node_definition",
+                        description:
+                            "Get node definition from catalog by type and subtype. " +
+                            "Returns complete node specification including config schema and fields.",
+                        inputSchema: {
+                            type: "object",
+                            properties: {
+                                nodeType: {
+                                    type: "string",
+                                    enum: ["source", "transformer", "target", "system"],
+                                    description: "Node category"
+                                },
+                                subType: {
+                                    type: "string",
+                                    description: "Specific node type (e.g., 'csv', 'filter', 'sqlite')"
+                                }
+                            },
+                            required: ["nodeType", "subType"]
                         }
                     }
                 ]
@@ -297,6 +464,60 @@ export class ETLMCPServer {
                     };
                 } catch (error: any) {
                     return { isError: true, content: [{ type: "text", text: `Workflow generation failed: ${error.message}` }] };
+                }
+            }
+
+            // ── Tool: compile_etl ─────────────────────────────────────────────────────────
+            if (request.params.name === "compile_etl") {
+                const { naturalLanguage } = request.params.arguments as any;
+                try {
+                    const result = await this.compiler.compile(naturalLanguage);
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify(result, null, 2)
+                        }]
+                    };
+                } catch (error: any) {
+                    return { isError: true, content: [{ type: "text", text: `Compilation failed: ${error.message}` }] };
+                }
+            }
+
+            // ── Tool: validate_graph ──────────────────────────────────────────────────────
+            if (request.params.name === "validate_graph") {
+                const { workflow } = request.params.arguments as any;
+                try {
+                    const validation = await this.validator.validate(workflow);
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify(validation, null, 2)
+                        }]
+                    };
+                } catch (error: any) {
+                    return { isError: true, content: [{ type: "text", text: `Validation failed: ${error.message}` }] };
+                }
+            }
+
+            // ── Tool: get_node_definition ─────────────────────────────────────────────────
+            if (request.params.name === "get_node_definition") {
+                const { nodeType, subType } = request.params.arguments as any;
+                try {
+                    const nodeDef = this.registry.getNodeDefinition(nodeType, subType);
+                    if (!nodeDef) {
+                        return {
+                            isError: true,
+                            content: [{ type: "text", text: `Node definition not found: ${nodeType}/${subType}` }]
+                        };
+                    }
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify(nodeDef, null, 2)
+                        }]
+                    };
+                } catch (error: any) {
+                    return { isError: true, content: [{ type: "text", text: `Failed to get node definition: ${error.message}` }] };
                 }
             }
 
