@@ -3,36 +3,57 @@ import { CanvasPanel } from './CanvasPanel';
 import { NodeSidebarProvider } from './NodeSidebarProvider';
 import { NodeDetailsProvider } from './NodeDetailsProvider';
 import { ETLMCPServer } from './mcp/MCPServer';
-import { configureEtlCodeMcpServer, isEtlCodeMcpConfigured, getMcpSettingsPath } from './utils/mcpConfig';
+import { configureEtlCodeMcpServer, getMcpSettingsPath } from './utils/mcpConfig';
 
-export function activate(context: vscode.ExtensionContext) {
+async function configureGlobalVsCodeMcpServer(extensionPath: string) {
+    const mcpConfig = vscode.workspace.getConfiguration('mcp');
+    const existingServers = mcpConfig.get<Record<string, unknown>>('servers') ?? {};
+    const serverEntryPath = vscode.Uri.joinPath(
+        vscode.Uri.file(extensionPath),
+        'dist',
+        'mcp',
+        'server-entry.js'
+    ).fsPath;
+
+    await mcpConfig.update(
+        'servers',
+        {
+            ...existingServers,
+            'etl-code': {
+                type: 'stdio',
+                command: 'node',
+                args: [serverEntryPath]
+            }
+        },
+        vscode.ConfigurationTarget.Global
+    );
+}
+
+export async function activate(context: vscode.ExtensionContext) {
     console.log('ETL Code extension is now active');
 
-    // Configure MCP settings globally for Bob
+    // Configure MCP settings for Bob and VS Code every activation.
+    // The writes are idempotent and repair empty/stale files created during F5 development.
     const mcpPort = 3001;
     try {
-        if (!isEtlCodeMcpConfigured()) {
-            configureEtlCodeMcpServer(mcpPort);
-            vscode.window.showInformationMessage(
-                `ETL Code MCP server configured at http://localhost:${mcpPort}/sse`
-            );
-            console.log(`MCP settings configured at: ${getMcpSettingsPath()}`);
-        } else {
-            console.log('ETL Code MCP server already configured');
-        }
+        const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? context.extensionUri.fsPath;
+        const configuredPaths = configureEtlCodeMcpServer(mcpPort, {
+            extensionPath: context.extensionUri.fsPath,
+            workspacePath
+        });
+        await configureGlobalVsCodeMcpServer(context.extensionUri.fsPath);
+
+        vscode.window.showInformationMessage(
+            `ETL Code MCP server configured at http://localhost:${mcpPort}/sse`
+        );
+        console.log(`MCP settings configured at: ${getMcpSettingsPath()}`);
+        console.log(`MCP config files refreshed: ${configuredPaths.map(result => result.path).join(', ')}`);
     } catch (error) {
         console.error('Failed to configure MCP settings:', error);
         vscode.window.showWarningMessage(
             'Failed to configure MCP settings. You may need to configure manually.'
         );
     }
-
-    // Start MCP Server (SSE for external tools like IBM Bob to connect)
-    const mcpServer = new ETLMCPServer();
-    mcpServer.startHttp(mcpPort).catch(err => {
-        console.error("MCP Server failed to start", err);
-        vscode.window.showErrorMessage(`MCP Server failed to start on port ${mcpPort}: ${err.message}`);
-    });
 
     // 1. Initialize Providers
     const nodeSidebarProvider = new NodeSidebarProvider(context.extensionUri, () => {
@@ -53,6 +74,16 @@ export function activate(context: vscode.ExtensionContext) {
     CanvasPanel.onNodesDeleted = (nodeIds) => {
         nodeDetailsProvider.clearDetailsForNodes(nodeIds);
     };
+
+    // Start MCP Server (SSE for external tools like IBM Bob to connect)
+    const mcpServer = new ETLMCPServer((workflow) => {
+        CanvasPanel.importWorkflow(context.extensionUri, workflow);
+        vscode.window.showInformationMessage('Generated workflow imported to the ETL Canvas.');
+    });
+    mcpServer.startHttp(mcpPort).catch(err => {
+        console.error("MCP Server failed to start", err);
+        vscode.window.showErrorMessage(`MCP Server failed to start on port ${mcpPort}: ${err.message}`);
+    });
 
     // 3. Register WebviewViewProviders (Sidebar)
     const sidebarRegistration = vscode.window.registerWebviewViewProvider(

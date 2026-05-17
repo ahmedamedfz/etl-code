@@ -21,8 +21,31 @@ export class ResourceLoader {
   private resourcePath: string;
   private cache = new Map<string, any>();
 
-  constructor(resourcePath: string = path.join(__dirname, '../../resources')) {
-    this.resourcePath = resourcePath;
+  constructor(resourcePath?: string) {
+    if (resourcePath) {
+        this.resourcePath = resourcePath;
+    } else {
+        // Find the resources directory by checking multiple possible locations
+        // - dist/ (from esbuild extension.js) -> ../resources
+        // - dist/mcp/ (from esbuild server-entry.js) -> ../../resources
+        // - src/semantic/ (from ts-node / uncompiled tests) -> ../../resources
+        const candidates = [
+            path.join(__dirname, '../../resources'), // src/semantic or dist/mcp
+            path.join(__dirname, '../resources'),    // dist
+            path.join(process.cwd(), 'resources')    // fallback to CWD
+        ];
+        
+        this.resourcePath = candidates[0]; // default
+        
+        // Use synchronous fs to set the path immediately if we can find it
+        const fsSync = require('fs');
+        for (const candidate of candidates) {
+            if (fsSync.existsSync(candidate)) {
+                this.resourcePath = candidate;
+                break;
+            }
+        }
+    }
   }
 
   /**

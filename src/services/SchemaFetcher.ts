@@ -202,26 +202,22 @@ export class SchemaFetcher {
             let sampleObject = data;
 
             if (Array.isArray(data)) {
-
-                if (data.length > 0) {
-                    sampleObject = data[0];
-                } else {
-                    return [];
+                sampleObject = data[0];
+            } else if (data && typeof data === 'object') {
+                const firstArray = Object.values(data).find(Array.isArray);
+                if (Array.isArray(firstArray)) {
+                    sampleObject = firstArray[0];
                 }
             }
 
-            if (
-                typeof sampleObject === 'object' &&
-                sampleObject !== null
-            ) {
+            if (!sampleObject) {
+                return [];
+            }
 
-                return Object.keys(sampleObject).map((key, index) => ({
-
+            if (typeof sampleObject === 'object' && sampleObject !== null) {
+                return this.flattenApiSchema(sampleObject).map((field, index) => ({
                     id: `api_field_${index}`,
-                    name: key,
-                    type: Array.isArray(sampleObject[key])
-                        ? 'array'
-                        : typeof sampleObject[key]
+                    ...field
                 }));
             }
 
@@ -239,6 +235,44 @@ export class SchemaFetcher {
                 `Failed to fetch API schema: ${error.message}`
             );
         }
+    }
+
+    private static flattenApiSchema(
+        sampleObject: Record<string, any>,
+        prefix = ''
+    ): Array<{ name: string; type: string }> {
+        return Object.entries(sampleObject).flatMap(([key, value]) => {
+            const fieldName = this.toSnakeCase(prefix ? `${prefix}_${key}` : key);
+
+            if (value && typeof value === 'object' && !Array.isArray(value)) {
+                return this.flattenApiSchema(value, fieldName);
+            }
+
+            return [{
+                name: fieldName,
+                type: Array.isArray(value) ? 'string' : this.normalizeApiType(value)
+            }];
+        });
+    }
+
+    private static normalizeApiType(value: unknown): string {
+        if (typeof value === 'number') {
+            return Number.isInteger(value) ? 'integer' : 'float';
+        }
+
+        if (typeof value === 'boolean') {
+            return 'boolean';
+        }
+
+        return 'string';
+    }
+
+    private static toSnakeCase(value: string): string {
+        return value
+            .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+            .replace(/[^a-zA-Z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .toLowerCase();
     }
 
     static async fetchSqliteSchema(

@@ -2,9 +2,10 @@ import { AIResponseSchema } from '../types';
 
 export class SQLGenerator {
     generateInsertSQL(tableName: string, mapping: AIResponseSchema['mapping'], data: any[]): string[] {
-        if (!data || data.length === 0) return [];
+        if (!data || data.length === 0) {return [];}
 
-        const targetColumns = mapping.map(m => m.targetField);
+        const targetColumns = mapping.map(m => this.quoteIdentifier(m.targetField));
+        const targetTable = this.quoteIdentifier(tableName);
         const statements: string[] = [];
 
         for (const row of data) {
@@ -13,11 +14,20 @@ export class SQLGenerator {
                 return this.formatValueForSQL(sourceValue, m.transformLogic);
             });
 
-            const sql = `INSERT INTO ${tableName} (${targetColumns.join(', ')}) VALUES (${values.join(', ')});`;
+            const sql = `INSERT INTO ${targetTable} (${targetColumns.join(', ')}) VALUES (${values.join(', ')});`;
             statements.push(sql);
         }
 
         return statements;
+    }
+
+    generateCreateTableSQL(tableName: string, mapping: AIResponseSchema['mapping']): string {
+        const columns = mapping.map(m => `${this.quoteIdentifier(m.targetField)} TEXT`);
+        return `CREATE TABLE IF NOT EXISTS ${this.quoteIdentifier(tableName)} (${columns.join(', ')});`;
+    }
+
+    generateDropTableSQL(tableName: string): string {
+        return `DROP TABLE IF EXISTS ${this.quoteIdentifier(tableName)};`;
     }
 
     private formatValueForSQL(value: any, transformLogic?: string): string {
@@ -47,5 +57,9 @@ export class SQLGenerator {
         }
 
         return String(formattedValue);
+    }
+
+    private quoteIdentifier(identifier: string): string {
+        return `"${identifier.replace(/"/g, '""')}"`;
     }
 }

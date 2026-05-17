@@ -1,12 +1,11 @@
 {
-  "mcpServers": {
+  "servers": {
     "etl-code": {
+      "type": "stdio",
       "command": "node",
       "args": [
         "/Users/ahmadfariz/Projects/github/etl-code/dist/mcp/server-entry.js"
-      ],
-      "env": {},
-      "disabled": false
+      ]
     }
   }
 }

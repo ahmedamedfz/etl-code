@@ -108,7 +108,7 @@ export class IDGenerator {
    */
   parseEdgeId(edgeId: string): EdgeIdComponents | null {
     const match = edgeId.match(/edge_(.+?)_(.+?)_(.+?)_(.+)/);
-    if (!match) return null;
+    if (!match) {return null;}
     
     return {
       source: match[1],
