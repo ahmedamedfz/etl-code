@@ -25,6 +25,12 @@ export type TargetType =
   | 'mongodb'
   | 'rest-api';
 
+export type SystemGeneratorType =
+  | 'current-datetime'
+  | 'uuid'
+  | 'sequential-id'
+  | 'random-int';
+
 export interface Field {
   id: string;
   name: string;
@@ -63,7 +69,13 @@ export interface TargetNodeData extends BaseNodeData {
   inputFields: Field[];
 }
 
+export interface SystemNodeData extends BaseNodeData {
+  systemType: SystemGeneratorType;
+  outputFields: Field[];
+}
+
 export type ETLNodeData =
   | SourceNodeData
   | TransformerNodeData
-  | TargetNodeData;
+  | TargetNodeData
+  | SystemNodeData;

@@ -24,6 +24,15 @@ const SidebarView = () => {
       ]
     },
     {
+      title: 'System',
+      nodes: [
+        { type: 'system', subType: 'current-datetime', label: 'Current Date/Time', icon: 'fa-clock' },
+        { type: 'system', subType: 'uuid', label: 'UUID Generator', icon: 'fa-fingerprint' },
+        { type: 'system', subType: 'sequential-id', label: 'Sequential ID', icon: 'fa-list-ol' },
+        { type: 'system', subType: 'random-int', label: 'Random Integer', icon: 'fa-dice' },
+      ]
+    },
+    {
       title: 'Transformers',
       nodes: [
         { type: 'transformer', subType: 'filter', label: 'Filter', icon: 'fa-filter' },
