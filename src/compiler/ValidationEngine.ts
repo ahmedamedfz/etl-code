@@ -68,7 +68,7 @@ export class ValidationEngine {
     const rules = this.registry.getValidationRulesByCategory('graph');
 
     for (const rule of rules) {
-      if (rule.severity !== 'error') continue;
+      if (rule.severity !== 'error') {continue;}
 
       const validator = this.getGraphValidator(rule.rule);
       const result = validator(workflow);
@@ -96,7 +96,7 @@ export class ValidationEngine {
 
     for (const node of workflow.nodes) {
       for (const rule of rules) {
-        if (rule.severity !== 'error') continue;
+        if (rule.severity !== 'error') {continue;}
 
         const validator = this.getNodeValidator(rule.rule);
         const result = validator(node, workflow);
@@ -125,7 +125,7 @@ export class ValidationEngine {
 
     for (const edge of workflow.edges) {
       for (const rule of rules) {
-        if (rule.severity !== 'error') continue;
+        if (rule.severity !== 'error') {continue;}
 
         const validator = this.getEdgeValidator(rule.rule);
         const result = validator(edge, workflow);
@@ -154,10 +154,10 @@ export class ValidationEngine {
     const typeSystem = this.registry.getTypeSystem();
 
     for (const edge of workflow.edges) {
-      if (!edge.sourceHandle || !edge.targetHandle) continue;
+      if (!edge.sourceHandle || !edge.targetHandle) {continue;}
 
       for (const rule of rules) {
-        if (rule.severity !== 'error') continue;
+        if (rule.severity !== 'error') {continue;}
 
         const validator = this.getTypeValidator(rule.rule);
         const result = validator(edge, workflow, typeSystem);
@@ -190,7 +190,7 @@ export class ValidationEngine {
 
       for (const expr of expressions) {
         for (const rule of rules) {
-          if (rule.severity !== 'error') continue;
+          if (rule.severity !== 'error') {continue;}
 
           const validator = this.getExpressionValidator(rule.rule);
           const result = validator(expr, node, grammar);
@@ -222,10 +222,10 @@ export class ValidationEngine {
       const subType = node.data.sourceType || node.data.operation || node.data.targetType || node.data.systemType;
       const nodeDef = this.registry.getNodeDefinition(node.type as any, subType);
 
-      if (!nodeDef) continue;
+      if (!nodeDef) {continue;}
 
       for (const rule of rules) {
-        if (rule.severity !== 'error') continue;
+        if (rule.severity !== 'error') {continue;}
 
         const validator = this.getConfigValidator(rule.rule);
         const result = validator(node.data.config, nodeDef.config);
@@ -315,7 +315,7 @@ export class ValidationEngine {
       const outgoingEdges = workflow.edges.filter(e => e.source === nodeId);
       for (const edge of outgoingEdges) {
         if (!visited.has(edge.target)) {
-          if (hasCycle(edge.target)) return true;
+          if (hasCycle(edge.target)) {return true;}
         } else if (recursionStack.has(edge.target)) {
           return true;
         }
@@ -404,7 +404,7 @@ export class ValidationEngine {
   }
 
   private validateConnectedComponents(workflow: WorkflowJSON): ValidationCheck {
-    if (workflow.nodes.length === 0) return { valid: true };
+    if (workflow.nodes.length === 0) {return { valid: true };}
 
     const visited = new Set<string>();
     
@@ -470,7 +470,7 @@ export class ValidationEngine {
     const subType = node.data.sourceType || node.data.operation || node.data.targetType || node.data.systemType;
     const nodeDef = this.registry.getNodeDefinition(node.type, subType);
     
-    if (!nodeDef || !nodeDef.config) return { valid: true };
+    if (!nodeDef || !nodeDef.config) {return { valid: true };}
 
     for (const [key, prop] of Object.entries(nodeDef.config)) {
       if ((prop as any).required && !node.data.config[key]) {
@@ -591,10 +591,10 @@ export class ValidationEngine {
     const expressions: string[] = [];
     const config = node.data.config;
 
-    if (config.condition) expressions.push(config.condition);
-    if (config.expression) expressions.push(config.expression);
-    if (config.groupBy) expressions.push(config.groupBy);
-    if (config.aggregations) expressions.push(config.aggregations);
+    if (config.condition) {expressions.push(config.condition);}
+    if (config.expression) {expressions.push(config.expression);}
+    if (config.groupBy) {expressions.push(config.groupBy);}
+    if (config.aggregations) {expressions.push(config.aggregations);}
 
     return expressions;
   }

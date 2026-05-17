@@ -39,54 +39,7 @@ export interface WorkflowJSON {
     edges: WorkflowEdge[];
 }
 
-// ── Field catalog: maps common CSV column names to SQL types ─────────────────
-const BATTERY_FIELDS: WorkflowField[] = [
-    { id: 'col_0',  name: 'Timestamp',                type: 'date'    },
-    { id: 'col_1',  name: 'Device_ID',                type: 'string'  },
-    { id: 'col_2',  name: 'Battery_Voltage_V',        type: 'float'   },
-    { id: 'col_3',  name: 'Battery_Voltage_mV',       type: 'integer' },
-    { id: 'col_4',  name: 'Cell_1_Voltage',           type: 'float'   },
-    { id: 'col_5',  name: 'Cell_2_Voltage',           type: 'float'   },
-    { id: 'col_6',  name: 'Cell_3_Voltage',           type: 'float'   },
-    { id: 'col_7',  name: 'State_Of_Charge',          type: 'float'   },
-    { id: 'col_8',  name: 'Temperature_C',            type: 'float'   },
-    { id: 'col_9',  name: 'Temperature_F',            type: 'float'   },
-    { id: 'col_10', name: 'Charge_Current_A',         type: 'float'   },
-    { id: 'col_11', name: 'Discharge_Current_A',      type: 'float'   },
-    { id: 'col_12', name: 'Cycle_Count',              type: 'integer' },
-    { id: 'col_13', name: 'Internal_Resistance_mOhm', type: 'float'  },
-    { id: 'col_14', name: 'System_Health_Percentage', type: 'float'  },
-    { id: 'col_15', name: 'State_Flag',               type: 'string'  },
-    { id: 'col_16', name: 'Is_Charging',              type: 'boolean' },
-    { id: 'col_17', name: 'Fault_Code',               type: 'string'  },
-    { id: 'col_18', name: 'Humidity_Percentage',      type: 'float'   },
-    { id: 'col_19', name: 'Pressure_hPa',             type: 'float'   },
-];
-
-const BATTERY_TARGET_FIELDS: WorkflowField[] = [
-    { id: 'sql_col_0',  name: 'id',                       type: 'integer'  },
-    { id: 'sql_col_1',  name: 'device_id',                type: 'text'     },
-    { id: 'sql_col_2',  name: 'timestamp',                type: 'datetime' },
-    { id: 'sql_col_3',  name: 'battery_voltage_v',        type: 'real'     },
-    { id: 'sql_col_4',  name: 'battery_voltage_mv',       type: 'integer'  },
-    { id: 'sql_col_5',  name: 'cell_1_voltage',           type: 'real'     },
-    { id: 'sql_col_6',  name: 'cell_2_voltage',           type: 'real'     },
-    { id: 'sql_col_7',  name: 'cell_3_voltage',           type: 'real'     },
-    { id: 'sql_col_8',  name: 'state_of_charge',          type: 'real'     },
-    { id: 'sql_col_9',  name: 'temperature_c',            type: 'real'     },
-    { id: 'sql_col_10', name: 'temperature_f',            type: 'real'     },
-    { id: 'sql_col_11', name: 'charge_current_a',         type: 'real'     },
-    { id: 'sql_col_12', name: 'discharge_current_a',      type: 'real'     },
-    { id: 'sql_col_13', name: 'cycle_count',              type: 'integer'  },
-    { id: 'sql_col_14', name: 'internal_resistance_mohm', type: 'real'     },
-    { id: 'sql_col_15', name: 'system_health_percentage', type: 'real'     },
-    { id: 'sql_col_16', name: 'state_flag',               type: 'text'     },
-    { id: 'sql_col_17', name: 'is_charging',              type: 'boolean'  },
-    { id: 'sql_col_18', name: 'fault_code',               type: 'text'     },
-    { id: 'sql_col_19', name: 'humidity_percentage',      type: 'real'     },
-    { id: 'sql_col_20', name: 'pressure_hpa',             type: 'real'     },
-    { id: 'sql_col_21', name: 'created_at',               type: 'datetime' },
-];
+const DEFAULT_SOURCE_COLUMNS = ['id', 'name', 'value', 'created_at'];
 
 // ── Edge builder helper ───────────────────────────────────────────────────────
 function edge(
@@ -118,31 +71,124 @@ interface ParsedIntent {
     mapExpression:   string;
     hasSequentialId: boolean;
     hasTimestamp:    boolean;
-    fieldSet:        'battery' | 'generic';
+    sourceFields:    WorkflowField[];
+    targetFields:    WorkflowField[];
 }
 
 function parseDescription(desc: string): ParsedIntent {
     const d = desc.toLowerCase();
+    const sourceFile = extractSourceFile(desc);
+    const targetTable = extractTargetTable(desc);
+    const columnNames = extractColumnNames(desc);
+    const sourceFields = buildSourceFields(columnNames);
+    const targetFields = buildTargetFields(sourceFields);
+
     return {
-        sourceFile:      d.includes('battery') ? '/path/to/battery.csv' : '/path/to/data.csv',
-        sourceType:      d.includes('json') ? 'json' : 'csv',
-        targetTable:     d.includes('battery_telemetry') ? 'battery_telemetry'
-                       : d.includes('battery')           ? 'battery_telemetry'
-                       : 'etl_output',
+        sourceFile,
+        sourceType:      d.includes('api') || /^https?:\/\//i.test(sourceFile) ? 'api'
+                       : d.includes('json') ? 'json'
+                       : 'csv',
+        targetTable,
         targetType:      d.includes('postgres') || d.includes('supabase') ? 'postgres'
                        : d.includes('oracle')                             ? 'oracle'
                        : 'sqlite',
         hasFilter:       d.includes('filter') || d.includes('timestamp') || d.includes('before'),
-        filterField:     'Timestamp',
+        filterField:     sourceFields[0]?.name || 'created_at',
         hasAggregate:    d.includes('aggregate') || d.includes('group') || d.includes('count'),
-        aggregateField:  'State_Flag',
-        hasMap:          d.includes('map') || d.includes('convert') || d.includes('real') || d.includes('humidity'),
-        mapField:        'Humidity_Percentage',
-        mapExpression:   'REAL({{Humidity_Percentage}})',
+        aggregateField:  sourceFields[1]?.name || sourceFields[0]?.name || 'id',
+        hasMap:          d.includes('map') || d.includes('convert') || d.includes('real'),
+        mapField:        sourceFields[2]?.name || sourceFields[0]?.name || 'value',
+        mapExpression:   `REAL({{${sourceFields[2]?.name || sourceFields[0]?.name || 'value'}}})`,
         hasSequentialId: d.includes('sequential') || d.includes('id') || d.includes('sequence'),
         hasTimestamp:    d.includes('timestamp') || d.includes('filter') || d.includes('datetime'),
-        fieldSet:        d.includes('battery') ? 'battery' : 'generic',
+        sourceFields,
+        targetFields,
     };
+}
+
+function extractSourceFile(desc: string): string {
+    return desc.match(/https?:\/\/[^\s,;]+/i)?.[0] ||
+        desc.match(/(?:load|read|from)\s+([^\s,]+)/i)?.[1] ||
+        '/path/to/data.csv';
+}
+
+function extractTargetTable(desc: string): string {
+    const destinationMatch = desc.match(/(?:save|write|insert)\s+(?:to|into)\s+(?:(?:sqlite|postgres|postgresql|supabase|oracle|mysql)\s+)?(\w+)/i);
+    const destination = destinationMatch?.[1];
+
+    if (destination && !isTargetTypeWord(destination)) {
+        return destination;
+    }
+
+    return desc.match(/table\s+(\w+)/i)?.[1] ||
+        deriveTableNameFromSource(extractSourceFile(desc)) ||
+        'etl_output';
+}
+
+function deriveTableNameFromSource(source: string): string | undefined {
+    if (!/^https?:\/\//i.test(source)) {
+        return undefined;
+    }
+
+    return new URL(source).pathname.split('/').filter(Boolean).pop()?.replace(/[^a-zA-Z0-9_]/g, '_');
+}
+
+function isTargetTypeWord(value: string): boolean {
+    return ['sqlite', 'postgres', 'postgresql', 'supabase', 'oracle', 'mysql'].includes(value.toLowerCase());
+}
+
+function extractColumnNames(desc: string): string[] {
+    const columnsMatch = desc.match(/(?:columns|fields)\s+([a-zA-Z0-9_,\s]+)/i);
+    if (!columnsMatch) {
+        return DEFAULT_SOURCE_COLUMNS;
+    }
+
+    const columns = columnsMatch[1]
+        .split(/[,\s]+/)
+        .map(c => c.trim())
+        .filter(Boolean)
+        .filter(c => !['to', 'into', 'from', 'save', 'write', 'insert', 'table'].includes(c.toLowerCase()));
+
+    return columns.length > 0 ? columns : DEFAULT_SOURCE_COLUMNS;
+}
+
+function buildSourceFields(columnNames: string[]): WorkflowField[] {
+    return columnNames.map((name, index) => ({
+        id: `col_${index}`,
+        name,
+        type: inferFieldType(name)
+    }));
+}
+
+function buildTargetFields(sourceFields: WorkflowField[]): WorkflowField[] {
+    return sourceFields.map((field, index) => ({
+        id: `sql_col_${index}`,
+        name: toSnakeCase(field.name),
+        type: toSqlFieldType(field.type)
+    }));
+}
+
+function inferFieldType(name: string): string {
+    const normalized = name.toLowerCase();
+    if (normalized.includes('date') || normalized.includes('time') || normalized.endsWith('_at')) {return 'datetime';}
+    if (normalized.startsWith('is_') || normalized.startsWith('has_')) {return 'boolean';}
+    if (normalized.includes('id') || normalized.includes('count') || normalized.includes('qty')) {return 'integer';}
+    if (normalized.includes('amount') || normalized.includes('price') || normalized.includes('total') || normalized.includes('value')) {return 'float';}
+    return 'string';
+}
+
+function toSqlFieldType(type: string): string {
+    if (type === 'float') {return 'real';}
+    if (type === 'string') {return 'text';}
+    return type;
+}
+
+function toSnakeCase(value: string): string {
+    return value
+        .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase();
 }
 
 // ── Main generator ────────────────────────────────────────────────────────────
@@ -151,10 +197,10 @@ export function generateWorkflowFromDescription(description: string, _format: st
     const nodes: WorkflowNode[] = [];
     const edges: WorkflowEdge[] = [];
 
-    const sourceFields  = intent.fieldSet === 'battery' ? BATTERY_FIELDS : BATTERY_FIELDS.slice(0, 5);
-    const targetFields  = intent.fieldSet === 'battery' ? BATTERY_TARGET_FIELDS : BATTERY_TARGET_FIELDS.slice(0, 10);
+    const sourceFields  = intent.sourceFields;
+    const targetFields  = intent.targetFields;
     const connectionStr = intent.targetType === 'sqlite'
-        ? '/path/to/batteries.db'
+        ? '/path/to/sqlite.db'
         : `${intent.targetType}://user:pass@host:5432/${intent.targetTable}`;
 
     // ── node_1: CSV Source ────────────────────────────────────────────────────
@@ -222,7 +268,7 @@ export function generateWorkflowFromDescription(description: string, _format: st
                     groupBy:      `{{${intent.aggregateField}}}`,
                     aggregations: `Count({{${intent.aggregateField}}})`
                 },
-                inputFields:  [{ id: 'col_15', name: intent.aggregateField, type: 'string' }],
+                inputFields:  [sourceFields.find(f => f.name === intent.aggregateField) || sourceFields[0]],
                 outputFields: [
                     { id: 'agg_1', name: 'group_key',   type: 'string' },
                     { id: 'agg_2', name: 'total_count', type: 'number' }
@@ -230,7 +276,8 @@ export function generateWorkflowFromDescription(description: string, _format: st
                 mappings: []
             }
         });
-        edges.push(edge('node_1', 'col_15', `node_${nextNodeId}`, 'col_15'));
+        const aggregateField = sourceFields.find(f => f.name === intent.aggregateField) || sourceFields[0];
+        edges.push(edge('node_1', aggregateField.id, `node_${nextNodeId}`, aggregateField.id));
         nextNodeId++;
     }
 
@@ -278,24 +325,24 @@ export function generateWorkflowFromDescription(description: string, _format: st
                     targetColumn: '',
                     expression:   intent.mapExpression
                 },
-                inputFields:  [{ id: 'col_18', name: intent.mapField, type: 'float' }],
-                outputFields: [{ id: 'col_18', name: intent.mapField, type: 'float' }],
+                inputFields:  [sourceFields.find(f => f.name === intent.mapField) || sourceFields[0]],
+                outputFields: [sourceFields.find(f => f.name === intent.mapField) || sourceFields[0]],
                 mappings: []
             }
         });
-        edges.push(edge('node_1',  'col_18', 'node_8',    'col_18'));
-        edges.push(edge('node_8',  'col_18', targetNodeId,'sql_col_19'));
+        const mapField = sourceFields.find(f => f.name === intent.mapField) || sourceFields[0];
+        const mapTarget = targetFields.find(f => f.name === toSnakeCase(mapField.name)) || targetFields[0];
+        edges.push(edge('node_1',  mapField.id, 'node_8', mapField.id));
+        edges.push(edge('node_8',  mapField.id, targetNodeId, mapTarget.id));
     }
 
     // ── Direct source → target edges ─────────────────────────────────────────
-    // Timestamp comes via FILTER if filter exists, otherwise direct
-    if (intent.hasTimestamp) {
-        edges.push(edge('node_3', 'col_0', targetNodeId, 'sql_col_2'));
-    } else {
-        edges.push(edge('node_1', 'col_0', targetNodeId, 'sql_col_2'));
-    }
-    // Device_ID always direct
-    edges.push(edge('node_1', 'col_1', targetNodeId, 'sql_col_1'));
+    sourceFields.forEach((sourceField, index) => {
+        const targetField = targetFields[index];
+        if (!targetField) {return;}
+        const sourceNodeId = intent.hasTimestamp && index === 0 ? 'node_3' : 'node_1';
+        edges.push(edge(sourceNodeId, sourceField.id, targetNodeId, targetField.id));
+    });
 
     return { version: 1, format: 'full', nodes, edges };
 }

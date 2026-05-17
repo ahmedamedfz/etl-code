@@ -423,7 +423,7 @@ export class CompilerPipeline {
       const targetNode = nodes[i + 1];
       
       // Skip system nodes for now
-      if (sourceNode.type === 'system') continue;
+      if (sourceNode.type === 'system') {continue;}
       
       edges.push({
         id: `edge_${sourceNode.id}_${targetNode.id}`,

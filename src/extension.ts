@@ -27,13 +27,6 @@ export function activate(context: vscode.ExtensionContext) {
         );
     }
 
-    // Start MCP Server (SSE for external tools like IBM Bob to connect)
-    const mcpServer = new ETLMCPServer();
-    mcpServer.startHttp(mcpPort).catch(err => {
-        console.error("MCP Server failed to start", err);
-        vscode.window.showErrorMessage(`MCP Server failed to start on port ${mcpPort}: ${err.message}`);
-    });
-
     // 1. Initialize Providers
     const nodeSidebarProvider = new NodeSidebarProvider(context.extensionUri, () => {
         CanvasPanel.createOrShow(context.extensionUri);
@@ -53,6 +46,16 @@ export function activate(context: vscode.ExtensionContext) {
     CanvasPanel.onNodesDeleted = (nodeIds) => {
         nodeDetailsProvider.clearDetailsForNodes(nodeIds);
     };
+
+    // Start MCP Server (SSE for external tools like IBM Bob to connect)
+    const mcpServer = new ETLMCPServer((workflow) => {
+        CanvasPanel.importWorkflow(context.extensionUri, workflow);
+        vscode.window.showInformationMessage('Generated workflow imported to the ETL Canvas.');
+    });
+    mcpServer.startHttp(mcpPort).catch(err => {
+        console.error("MCP Server failed to start", err);
+        vscode.window.showErrorMessage(`MCP Server failed to start on port ${mcpPort}: ${err.message}`);
+    });
 
     // 3. Register WebviewViewProviders (Sidebar)
     const sidebarRegistration = vscode.window.registerWebviewViewProvider(

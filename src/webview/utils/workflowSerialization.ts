@@ -255,4 +255,4 @@ export const buildMcpPrompt = (workflow: WorkflowDocument): string =>
 ${JSON.stringify(workflow, null, 2)}
 \`\`\`
 
-Generate or update Python/pandas (or SQL) code that implements the sources, transforms, and targets described above. Respect connection configs and field names exactly.`;
+Validate this ETL workflow with the user before generating or executing any fallback code. If the automatic MCP execution cannot proceed, ask the user to confirm the source, transforms, target table, field mappings, and connection settings first. Do not create a standalone Python/pandas script as an automatic fallback.`;

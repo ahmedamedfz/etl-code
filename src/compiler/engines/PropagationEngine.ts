@@ -243,7 +243,7 @@ export class PropagationEngine {
     const sorted: WorkflowNode[] = [];
 
     const visit = (nodeId: string) => {
-      if (visited.has(nodeId)) return;
+      if (visited.has(nodeId)) {return;}
       visited.add(nodeId);
 
       // Visit all predecessors first
@@ -319,10 +319,10 @@ export class PropagationEngine {
     const expressions: string[] = [];
 
     // Collect all expressions from config
-    if (config.condition) expressions.push(config.condition);
-    if (config.expression) expressions.push(config.expression);
-    if (config.groupBy) expressions.push(config.groupBy);
-    if (config.aggregations) expressions.push(config.aggregations);
+    if (config.condition) {expressions.push(config.condition);}
+    if (config.expression) {expressions.push(config.expression);}
+    if (config.groupBy) {expressions.push(config.groupBy);}
+    if (config.aggregations) {expressions.push(config.aggregations);}
 
     // Check each expression
     for (const expr of expressions) {

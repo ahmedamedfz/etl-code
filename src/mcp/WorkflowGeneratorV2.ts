@@ -13,6 +13,8 @@
 import { ResourceRegistry } from '../semantic/ResourceRegistry';
 import { WorkflowJSON, WorkflowNode, WorkflowEdge, WorkflowField } from './WorkflowGenerator';
 
+const DEFAULT_SOURCE_COLUMNS = ['id', 'name', 'value', 'created_at'];
+
 export class WorkflowGeneratorV2 {
   private registry: ResourceRegistry;
   private nodeCounter = 0;
@@ -67,7 +69,8 @@ export class WorkflowGeneratorV2 {
         aggregations: `Count({{${intent.aggregateField}}})`
       });
       nodes.push(aggNode);
-      edges.push(this.createEdge(sourceNode.id, 'col_15', aggNode.id, 'col_15'));
+      const aggregateField = intent.sourceFields.find(f => f.name === intent.aggregateField) || intent.sourceFields[0];
+      edges.push(this.createEdge(sourceNode.id, aggregateField.id, aggNode.id, aggregateField.id));
     }
 
     if (intent.hasMap) {
@@ -76,7 +79,8 @@ export class WorkflowGeneratorV2 {
         expression: intent.mapExpression
       });
       nodes.push(mapNode);
-      edges.push(this.createEdge(sourceNode.id, 'col_18', mapNode.id, 'col_18'));
+      const mapField = intent.sourceFields.find(f => f.name === intent.mapField) || intent.sourceFields[0];
+      edges.push(this.createEdge(sourceNode.id, mapField.id, mapNode.id, mapField.id));
     }
 
     // Add target node
@@ -94,20 +98,20 @@ export class WorkflowGeneratorV2 {
     if (intent.hasMap) {
       const mapNode = nodes.find(n => n.data.operation === 'map');
       if (mapNode) {
-        edges.push(this.createEdge(mapNode.id, 'col_18', targetNode.id, 'sql_col_19'));
+        const mapField = intent.sourceFields.find(f => f.name === intent.mapField) || intent.sourceFields[0];
+        const mapTarget = intent.targetFields.find(f => f.name === this.toSnakeCase(mapField.name)) || intent.targetFields[0];
+        edges.push(this.createEdge(mapNode.id, mapField.id, targetNode.id, mapTarget.id));
       }
     }
 
     // Direct connections
-    if (intent.hasTimestamp) {
-      const filterNode = nodes.find(n => n.data.operation === 'filter');
-      if (filterNode) {
-        edges.push(this.createEdge(filterNode.id, 'col_0', targetNode.id, 'sql_col_2'));
-      }
-    } else {
-      edges.push(this.createEdge(sourceNode.id, 'col_0', targetNode.id, 'sql_col_2'));
-    }
-    edges.push(this.createEdge(sourceNode.id, 'col_1', targetNode.id, 'sql_col_1'));
+    const filterNode = nodes.find(n => n.data.operation === 'filter');
+    intent.sourceFields.forEach((sourceField, index) => {
+      const targetField = intent.targetFields[index];
+      if (!targetField) {return;}
+      const sourceId = intent.hasTimestamp && index === 0 && filterNode ? filterNode.id : sourceNode.id;
+      edges.push(this.createEdge(sourceId, sourceField.id, targetNode.id, targetField.id));
+    });
 
     return {
       version: 1,
@@ -137,7 +141,7 @@ export class WorkflowGeneratorV2 {
           delimiter: ',',
           skipRows: 0
         },
-        outputFields: this.getBatteryFields() // TODO: Make dynamic
+        outputFields: intent.sourceFields
       }
     };
   }
@@ -177,7 +181,7 @@ export class WorkflowGeneratorV2 {
     }
 
     const connectionStr = intent.targetType === 'sqlite'
-      ? '/path/to/batteries.db'
+      ? '/path/to/sqlite.db'
       : `${intent.targetType}://user:pass@host:5432/${intent.targetTable}`;
 
     return {
@@ -191,7 +195,7 @@ export class WorkflowGeneratorV2 {
           table: intent.targetTable,
           mode: 'append'
         },
-        inputFields: this.getBatteryTargetFields() // TODO: Make dynamic
+        inputFields: intent.targetFields
       }
     };
   }
@@ -258,45 +262,116 @@ export class WorkflowGeneratorV2 {
    */
   private parseIntent(desc: string): ParsedIntent {
     const d = desc.toLowerCase();
+    const sourceFields = this.buildSourceFields(this.extractColumnNames(desc));
+    const targetFields = this.buildTargetFields(sourceFields);
+    const sourceFile = this.extractSourceFile(desc);
+
     return {
-      sourceFile: d.includes('battery') ? '/path/to/battery.csv' : '/path/to/data.csv',
-      sourceType: d.includes('json') ? 'json' : 'csv',
-      targetTable: d.includes('battery_telemetry') ? 'battery_telemetry'
-                 : d.includes('battery') ? 'battery_telemetry'
-                 : 'etl_output',
+      sourceFile,
+      sourceType: d.includes('api') || /^https?:\/\//i.test(sourceFile) ? 'api'
+                : d.includes('json') ? 'json'
+                : 'csv',
+      targetTable: this.extractTargetTable(desc),
       targetType: d.includes('postgres') || d.includes('supabase') ? 'postgres'
                 : d.includes('oracle') ? 'oracle'
                 : 'sqlite',
       hasFilter: d.includes('filter') || d.includes('timestamp') || d.includes('before'),
-      filterField: 'Timestamp',
+      filterField: sourceFields[0]?.name || 'created_at',
       hasAggregate: d.includes('aggregate') || d.includes('group') || d.includes('count'),
-      aggregateField: 'State_Flag',
-      hasMap: d.includes('map') || d.includes('convert') || d.includes('real') || d.includes('humidity'),
-      mapField: 'Humidity_Percentage',
-      mapExpression: 'REAL({{Humidity_Percentage}})',
+      aggregateField: sourceFields[1]?.name || sourceFields[0]?.name || 'id',
+      hasMap: d.includes('map') || d.includes('convert') || d.includes('real'),
+      mapField: sourceFields[2]?.name || sourceFields[0]?.name || 'value',
+      mapExpression: `REAL({{${sourceFields[2]?.name || sourceFields[0]?.name || 'value'}}})`,
       hasSequentialId: d.includes('sequential') || d.includes('id') || d.includes('sequence'),
       hasTimestamp: d.includes('timestamp') || d.includes('filter') || d.includes('datetime'),
-      fieldSet: d.includes('battery') ? 'battery' : 'generic'
+      sourceFields,
+      targetFields
     };
   }
 
-  // TODO: Replace with dynamic field generation from schema
-  private getBatteryFields(): WorkflowField[] {
-    return [
-      { id: 'col_0', name: 'Timestamp', type: 'date' },
-      { id: 'col_1', name: 'Device_ID', type: 'string' },
-      { id: 'col_2', name: 'Battery_Voltage_V', type: 'float' },
-      // ... rest of fields
-    ];
+  private extractColumnNames(desc: string): string[] {
+    const columnsMatch = desc.match(/(?:columns|fields)\s+([a-zA-Z0-9_,\s]+)/i);
+    if (!columnsMatch) {
+      return DEFAULT_SOURCE_COLUMNS;
+    }
+
+    const columns = columnsMatch[1]
+      .split(/[,\s]+/)
+      .map(c => c.trim())
+      .filter(Boolean)
+      .filter(c => !['to', 'into', 'from', 'save', 'write', 'insert', 'table'].includes(c.toLowerCase()));
+
+    return columns.length > 0 ? columns : DEFAULT_SOURCE_COLUMNS;
   }
 
-  private getBatteryTargetFields(): WorkflowField[] {
-    return [
-      { id: 'sql_col_0', name: 'id', type: 'integer' },
-      { id: 'sql_col_1', name: 'device_id', type: 'text' },
-      { id: 'sql_col_2', name: 'timestamp', type: 'datetime' },
-      // ... rest of fields
-    ];
+  private extractSourceFile(desc: string): string {
+    return desc.match(/https?:\/\/[^\s,;]+/i)?.[0] ||
+      desc.match(/(?:load|read|from)\s+([^\s,]+)/i)?.[1] ||
+      '/path/to/data.csv';
+  }
+
+  private extractTargetTable(desc: string): string {
+    const destinationMatch = desc.match(/(?:save|write|insert)\s+(?:to|into)\s+(?:(?:sqlite|postgres|postgresql|supabase|oracle|mysql)\s+)?(\w+)/i);
+    const destination = destinationMatch?.[1];
+
+    if (destination && !this.isTargetTypeWord(destination)) {
+      return destination;
+    }
+
+    return desc.match(/table\s+(\w+)/i)?.[1] ||
+      this.deriveTableNameFromSource(this.extractSourceFile(desc)) ||
+      'etl_output';
+  }
+
+  private deriveTableNameFromSource(source: string): string | undefined {
+    if (!/^https?:\/\//i.test(source)) {
+      return undefined;
+    }
+
+    return new URL(source).pathname.split('/').filter(Boolean).pop()?.replace(/[^a-zA-Z0-9_]/g, '_');
+  }
+
+  private isTargetTypeWord(value: string): boolean {
+    return ['sqlite', 'postgres', 'postgresql', 'supabase', 'oracle', 'mysql'].includes(value.toLowerCase());
+  }
+
+  private buildSourceFields(columnNames: string[]): WorkflowField[] {
+    return columnNames.map((name, index) => ({
+      id: `col_${index}`,
+      name,
+      type: this.inferFieldType(name)
+    }));
+  }
+
+  private buildTargetFields(sourceFields: WorkflowField[]): WorkflowField[] {
+    return sourceFields.map((field, index) => ({
+      id: `sql_col_${index}`,
+      name: this.toSnakeCase(field.name),
+      type: this.toSqlFieldType(field.type)
+    }));
+  }
+
+  private inferFieldType(name: string): string {
+    const normalized = name.toLowerCase();
+    if (normalized.includes('date') || normalized.includes('time') || normalized.endsWith('_at')) {return 'datetime';}
+    if (normalized.startsWith('is_') || normalized.startsWith('has_')) {return 'boolean';}
+    if (normalized.includes('id') || normalized.includes('count') || normalized.includes('qty')) {return 'integer';}
+    if (normalized.includes('amount') || normalized.includes('price') || normalized.includes('total') || normalized.includes('value')) {return 'float';}
+    return 'string';
+  }
+
+  private toSqlFieldType(type: string): string {
+    if (type === 'float') {return 'real';}
+    if (type === 'string') {return 'text';}
+    return type;
+  }
+
+  private toSnakeCase(value: string): string {
+    return value
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .replace(/[^a-zA-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .toLowerCase();
   }
 }
 
@@ -314,7 +389,8 @@ interface ParsedIntent {
   mapExpression: string;
   hasSequentialId: boolean;
   hasTimestamp: boolean;
-  fieldSet: 'battery' | 'generic';
+  sourceFields: WorkflowField[];
+  targetFields: WorkflowField[];
 }
 
 // Made with Bob

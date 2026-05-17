@@ -264,8 +264,8 @@ export class ExpressionValidator {
     const expr = expression.trim();
 
     // Boolean literals
-    if (expr === 'true') return true;
-    if (expr === 'false') return false;
+    if (expr === 'true') {return true;}
+    if (expr === 'false') {return false;}
 
     // Number literals
     if (/^-?\d+(\.\d+)?$/.test(expr)) {
@@ -291,21 +291,21 @@ export class ExpressionValidator {
     const funcToken = tokens.find(t => t.type === 'function');
     if (funcToken) {
       const funcName = funcToken.value.toLowerCase();
-      if (['count', 'sum'].includes(funcName)) return 'integer';
-      if (['avg', 'min', 'max'].includes(funcName)) return 'float';
-      if (['concat', 'lower', 'upper', 'trim'].includes(funcName)) return 'string';
+      if (['count', 'sum'].includes(funcName)) {return 'integer';}
+      if (['avg', 'min', 'max'].includes(funcName)) {return 'float';}
+      if (['concat', 'lower', 'upper', 'trim'].includes(funcName)) {return 'string';}
     }
 
     // Check for operators
     const hasComparison = tokens.some(t => 
       t.type === 'operator' && ['==', '!=', '<', '>', '<=', '>='].includes(t.value)
     );
-    if (hasComparison) return 'boolean';
+    if (hasComparison) {return 'boolean';}
 
     const hasLogical = tokens.some(t => 
       t.type === 'operator' && ['&&', '||', '!'].includes(t.value)
     );
-    if (hasLogical) return 'boolean';
+    if (hasLogical) {return 'boolean';}
 
     // Default to string
     return 'string';

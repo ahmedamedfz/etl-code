@@ -129,7 +129,7 @@ export class TypeSystem {
    */
   canConvert(fromType: string, toType: string): boolean {
     // Same type is always convertible
-    if (fromType === toType) return true;
+    if (fromType === toType) {return true;}
 
     // Define conversion rules
     const conversionRules: Record<string, string[]> = {
@@ -164,8 +164,8 @@ export class TypeSystem {
    * Determine common type for multiple types
    */
   getCommonType(types: string[]): string {
-    if (types.length === 0) return 'string';
-    if (types.length === 1) return types[0];
+    if (types.length === 0) {return 'string';}
+    if (types.length === 1) {return types[0];}
 
     // If all types are the same, return that type
     if (types.every(t => t === types[0])) {
@@ -192,7 +192,7 @@ export class TypeSystem {
    */
   private isDateString(value: string): boolean {
     // ISO 8601 format
-    if (/^\d{4}-\d{2}-\d{2}/.test(value)) return true;
+    if (/^\d{4}-\d{2}-\d{2}/.test(value)) {return true;}
     
     // Try to parse as date
     const date = new Date(value);

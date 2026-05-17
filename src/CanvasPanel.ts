@@ -7,6 +7,8 @@ export class CanvasPanel {
     private readonly _panel: vscode.WebviewPanel;
     private readonly _extensionUri: vscode.Uri;
     private _disposables: vscode.Disposable[] = [];
+    private _isWebviewReady = false;
+    private _pendingMessages: any[] = [];
 
     // Static listener for updating the detail provider
     public static onNodeSelected?: (nodeData: any) => void;
@@ -34,6 +36,14 @@ export class CanvasPanel {
 
         CanvasPanel.currentPanel = new CanvasPanel(panel, extensionUri);
         return CanvasPanel.currentPanel;
+    }
+
+    public static importWorkflow(extensionUri: vscode.Uri, workflow: unknown) {
+        const panel = CanvasPanel.createOrShow(extensionUri);
+        panel.postMessage({
+            type: 'importWorkflow',
+            workflow
+        });
     }
 
     private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
@@ -66,6 +76,11 @@ export class CanvasPanel {
         webview.onDidReceiveMessage(
             async (message: any) => {
                 switch (message.type) {
+                    case 'canvasReady':
+                        this._isWebviewReady = true;
+                        this._flushPendingMessages();
+                        break;
+
                     case 'nodeSelected':
                         if (CanvasPanel.onNodeSelected) {
                             CanvasPanel.onNodeSelected(message.nodeData);
@@ -190,7 +205,17 @@ export class CanvasPanel {
     }
 
     public postMessage(message: any) {
+        if (!this._isWebviewReady) {
+            this._pendingMessages.push(message);
+            return;
+        }
+
         this._panel.webview.postMessage(message);
+    }
+
+    private _flushPendingMessages() {
+        const pending = this._pendingMessages.splice(0);
+        pending.forEach((message) => this._panel.webview.postMessage(message));
     }
 
     private _update() {

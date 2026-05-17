@@ -13,6 +13,8 @@ export interface ExecutionContext {
     tableName: string;
     dbConnector: IDatabaseConnector;
     aiMapping: AIResponseSchema;
+    internalSqlitePath?: string;
+    createTargetTable?: boolean;
 }
 
 export class ExecutionEngine {
@@ -69,19 +71,25 @@ export class ExecutionEngine {
             this.logger.log('INFO', 'Transform', 'Generating SQL statements from mapping');
             sqlStatements = this.sqlGenerator.generateInsertSQL(context.tableName, context.aiMapping.mapping, data);
 
-            // Step 4: Connect to DB (with fallback)
+            // Step 4: Validate generated target schema and inserts against local SQLite first
+            await this.preflightWithInternalSqlite(context, sqlStatements);
+
+            // Step 5: Connect to DB (with fallback)
             try {
                 await activeConnector.connect();
             } catch (dbError) {
                 this.logger.log('WARN', 'Connection', 'Primary DB connection failed, falling back to SQLite');
                 activeConnector = new SqliteConnector(':memory:');
                 await activeConnector.connect();
-                const createTableSql = `CREATE TABLE ${context.tableName} (${context.aiMapping.mapping.map(m => `${m.targetField} TEXT`).join(', ')});`;
-                await activeConnector.query(createTableSql);
                 isFallback = true;
             }
 
-            // Step 5: Execute SQL (insert executor)
+            if (context.createTargetTable !== false) {
+                await activeConnector.query(this.sqlGenerator.generateCreateTableSQL(context.tableName, context.aiMapping.mapping));
+                this.logger.log('INFO', 'TargetSchema', `Target table "${context.tableName}" is ready`);
+            }
+
+            // Step 6: Execute SQL (insert executor)
             this.logger.log('INFO', 'Load', `Executing ${sqlStatements.length} insert statements${isFallback ? ' (Fallback DB)' : ''}`);
 
             for (const [index, sql] of sqlStatements.entries()) {
@@ -154,5 +162,25 @@ export class ExecutionEngine {
             console.warn('[Backup] Failed to write backup files', e);
         }
     }
-}
 
+    private async preflightWithInternalSqlite(context: ExecutionContext, sqlStatements: string[]): Promise<void> {
+        const sqlitePath = context.internalSqlitePath || path.resolve(process.cwd(), 'sqlite.db');
+        const preflightConnector = new SqliteConnector(sqlitePath);
+
+        this.logger.log('INFO', 'SQLitePreflight', `Testing target schema in ${sqlitePath}`);
+
+        try {
+            await preflightConnector.connect();
+            await preflightConnector.query(this.sqlGenerator.generateDropTableSQL(context.tableName));
+            await preflightConnector.query(this.sqlGenerator.generateCreateTableSQL(context.tableName, context.aiMapping.mapping));
+
+            for (const sql of sqlStatements) {
+                await preflightConnector.query(sql);
+            }
+
+            this.logger.log('INFO', 'SQLitePreflight', `Schema and ${sqlStatements.length} insert statement(s) validated`);
+        } finally {
+            await preflightConnector.disconnect();
+        }
+    }
+}

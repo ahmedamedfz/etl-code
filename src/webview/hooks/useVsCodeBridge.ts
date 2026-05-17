@@ -55,6 +55,8 @@ export const useVsCodeBridge = (
   );
 
   useEffect(() => {
+    postToExtension({ type: 'canvasReady' });
+
     (window as Window & { deleteEtlNode?: (nodeId: string) => void }).deleteEtlNode = (nodeId: string) => {
       deleteNodesById([nodeId]);
     };
