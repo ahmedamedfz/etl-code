@@ -1,0 +1,8 @@
+{
+    "mcpServers": {
+        "etl-code": {
+            "command": "npm",
+            "args": ["run", "mcp:stdio", "--prefix", "${workspaceFolder}"]
+        }
+    }
+}

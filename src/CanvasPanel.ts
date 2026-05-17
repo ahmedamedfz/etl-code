@@ -47,6 +47,19 @@ export class CanvasPanel {
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
         this._setWebviewMessageListener(this._panel.webview);
+
+        // Handle messages from the webview
+        this._panel.webview.onDidReceiveMessage(
+            async message => {
+                switch (message.command) {
+                    case 'executePipeline':
+                        await this.handleExecutePipeline(message.data);
+                        return;
+                }
+            },
+            null,
+            this._disposables
+        );
     }
 
     private _setWebviewMessageListener(webview: vscode.Webview) {
@@ -118,6 +131,50 @@ export class CanvasPanel {
             undefined,
             this._disposables
         );
+    }
+
+    private async handleExecutePipeline(data: any) {
+        // We will dynamically import or use the ExecutionEngine
+        const { ExecutionEngine } = await import('./pipeline/ExecutionEngine');
+        const { OracleMockConnector } = await import('./db/OracleMockConnector');
+        
+        const engine = new ExecutionEngine();
+        const connector = new OracleMockConnector();
+        
+        try {
+            // Send starting event
+            this.postMessage({ type: 'pipeline-event', event: 'started' });
+
+            // Example hardcoded context for now, in reality data comes from the webview node config
+            const context = {
+                csvContent: data.csvContent || 'id,name\n1,Test',
+                tableName: data.tableName || 'test_table',
+                dbConnector: connector,
+                aiMapping: data.aiMapping || {
+                    mapping: [
+                        { sourceField: 'id', targetField: 'user_id', confidenceScore: 1.0 },
+                        { sourceField: 'name', targetField: 'user_name', confidenceScore: 1.0 }
+                    ],
+                    explanation: 'Default mapping'
+                }
+            };
+
+            const result = await engine.execute(context);
+
+            // Send completed event and results
+            this.postMessage({ 
+                type: 'pipeline-event', 
+                event: 'completed',
+                result 
+            });
+
+        } catch (error: any) {
+            this.postMessage({ 
+                type: 'pipeline-event', 
+                event: 'error',
+                error: error.message 
+            });
+        }
     }
 
     public dispose() {
