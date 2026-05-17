@@ -1,7 +1,7 @@
-import { ExecutionEngine } from './pipeline/ExecutionEngine';
-import { PostgresConnector } from './db/PostgresConnector';
-import { OracleMockConnector } from './db/OracleMockConnector';
-import { AIService } from './ai/AIService';
+import { ExecutionEngine } from '../pipeline/ExecutionEngine';
+import { PostgresConnector } from '../db/PostgresConnector';
+import { OracleMockConnector } from '../db/OracleMockConnector';
+import { AIService } from '../ai/AIService';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';

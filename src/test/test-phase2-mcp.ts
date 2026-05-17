@@ -16,10 +16,10 @@
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { ETLMCPServer } from './mcp/MCPServer';
-import { CSVProcessor } from './csv/CSVProcessor';
-import { SQLGenerator } from './sql/SQLGenerator';
-import { AIResponseSchema } from './types';
+import { ETLMCPServer } from '../mcp/MCPServer';
+import { CSVProcessor } from '../csv/CSVProcessor';
+import { SQLGenerator } from '../sql/SQLGenerator';
+import { AIResponseSchema } from '../types';
 
 // ── Sample Data: 5 rows matching the battery CSV schema from node_1 ──────────
 const BATTERY_CSV = `Timestamp,Device_ID,Battery_Voltage_V,Battery_Voltage_mV,Cell_1_Voltage,Cell_2_Voltage,Cell_3_Voltage,State_Of_Charge,Temperature_C,Temperature_F,Charge_Current_A,Discharge_Current_A,Cycle_Count,Internal_Resistance_mOhm,System_Health_Percentage,State_Flag,Is_Charging,Fault_Code,Humidity_Percentage,Pressure_hPa

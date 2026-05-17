@@ -1,7 +1,7 @@
-import { AIService } from './ai/AIService';
-import { PostgresConnector } from './db/PostgresConnector';
-import { SqliteConnector } from './db/SqliteConnector';
-import { OracleMockConnector } from './db/OracleMockConnector';
+import { AIService } from '../ai/AIService';
+import { PostgresConnector } from '../db/PostgresConnector';
+import { SqliteConnector } from '../db/SqliteConnector';
+import { OracleMockConnector } from '../db/OracleMockConnector';
 
 async function runMilestoneCheck() {
     console.log('--- Phase 1 Milestone Check ---');

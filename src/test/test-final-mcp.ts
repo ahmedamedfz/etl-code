@@ -17,12 +17,12 @@
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { ETLMCPServer } from './mcp/MCPServer';
-import { AIService } from './ai/AIService';
-import { ExecutionEngine } from './pipeline/ExecutionEngine';
-import { PostgresConnector } from './db/PostgresConnector';
-import { OracleMockConnector } from './db/OracleMockConnector';
-import { AIResponseSchema } from './types';
+import { ETLMCPServer } from '../mcp/MCPServer';
+import { AIService } from '../ai/AIService';
+import { ExecutionEngine } from '../pipeline/ExecutionEngine';
+import { PostgresConnector } from '../db/PostgresConnector';
+import { OracleMockConnector } from '../db/OracleMockConnector';
+import { AIResponseSchema } from '../types';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';

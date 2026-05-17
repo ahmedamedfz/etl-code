@@ -23,9 +23,9 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { ETLMCPServer } from './mcp/MCPServer';
-import { PostgresConnector } from './db/PostgresConnector';
-import { AIResponseSchema } from './types';
+import { ETLMCPServer } from '../mcp/MCPServer';
+import { PostgresConnector } from '../db/PostgresConnector';
+import { AIResponseSchema } from '../types';
 
 // ── Guard: fail fast if password not set ──────────────────────────────────────
 const SUPABASE_PASSWORD = process.env.SUPABASE_PASSWORD;

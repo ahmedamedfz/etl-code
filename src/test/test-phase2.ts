@@ -1,6 +1,6 @@
-import { CSVProcessor } from './csv/CSVProcessor';
-import { SQLGenerator } from './sql/SQLGenerator';
-import { AIResponseSchema } from './types';
+import { CSVProcessor } from '../csv/CSVProcessor';
+import { SQLGenerator } from '../sql/SQLGenerator';
+import { AIResponseSchema } from '../types';
 
 async function runPhase2() {
     console.log('--- Phase 2 Milestone Check ---');

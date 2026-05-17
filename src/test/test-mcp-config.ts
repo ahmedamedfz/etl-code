@@ -9,7 +9,7 @@ import {
     readMcpSettings,
     getMcpSettingsPath,
     removeEtlCodeMcpServer
-} from './utils/mcpConfig';
+} from '../utils/mcpConfig';
 
 console.log('=== Testing MCP Configuration ===\n');
 

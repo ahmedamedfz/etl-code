@@ -4,14 +4,14 @@
  * Following IMPLEMENTATION-GUIDE.md specifications
  */
 
-import { ResourceRegistry } from './semantic/ResourceRegistry.js';
-import { CompilerPipeline } from './compiler/pipeline/CompilerPipeline.js';
-import { ValidationEngine } from './compiler/ValidationEngine.js';
-import { PropagationEngine } from './compiler/engines/PropagationEngine.js';
-import { NodeFactory } from './compiler/factories/NodeFactory.js';
-import { IDGenerator } from './compiler/utils/IDGenerator.js';
-import { TypeSystem } from './compiler/utils/TypeSystem.js';
-import { ExpressionValidator } from './compiler/utils/ExpressionValidator.js';
+import { ResourceRegistry } from '../semantic/ResourceRegistry.js';
+import { CompilerPipeline } from '../compiler/pipeline/CompilerPipeline.js';
+import { ValidationEngine } from '../compiler/ValidationEngine.js';
+import { PropagationEngine } from '../compiler/engines/PropagationEngine.js';
+import { NodeFactory } from '../compiler/factories/NodeFactory.js';
+import { IDGenerator } from '../compiler/utils/IDGenerator.js';
+import { TypeSystem } from '../compiler/utils/TypeSystem.js';
+import { ExpressionValidator } from '../compiler/utils/ExpressionValidator.js';
 
 async function runIntegrationTests() {
   console.log('🚀 Starting AI-Native ETL Compiler Integration Tests\n');

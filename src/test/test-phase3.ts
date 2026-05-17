@@ -1,5 +1,5 @@
-import { ExecutionEngine } from './pipeline/ExecutionEngine';
-import { OracleMockConnector } from './db/OracleMockConnector';
+import { ExecutionEngine } from '../pipeline/ExecutionEngine';
+import { OracleMockConnector } from '../db/OracleMockConnector';
 
 async function runPhase3() {
     console.log('--- Phase 3 Milestone Check ---');
