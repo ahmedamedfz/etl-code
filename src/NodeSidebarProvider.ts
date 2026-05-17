@@ -57,6 +57,12 @@ export class NodeSidebarProvider implements vscode.WebviewViewProvider {
                         vscode.window.showInformationMessage('Please open the ETL Canvas first!');
                     }
                     break;
+                case 'configureMcp':
+                    vscode.commands.executeCommand('etl-code.configureMcpServer');
+                    break;
+                case 'openMcpGuide':
+                    vscode.commands.executeCommand('etl-code.openMcpSetupGuide');
+                    break;
             }
         });
     }

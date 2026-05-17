@@ -4,7 +4,7 @@
   "description": "\"ETL in Vscode withAI\"",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.120.0"
+    "vscode": "^1.85.0"
   },
   "categories": [
     "Other"
@@ -20,6 +20,31 @@
       {
         "command": "etl-code.openCanvas",
         "title": "Open ETL Canvas"
+      },
+      {
+        "command": "etl-code.configureMcpServer",
+        "title": "ETL: Configure MCP Server in Bob",
+        "category": "ETL Tools"
+      },
+      {
+        "command": "etl-code.openMcpSetupGuide",
+        "title": "ETL: Open MCP Setup Guide",
+        "category": "ETL Tools"
+      },
+      {
+        "command": "etl-code.toggleMcpServer",
+        "title": "ETL: Toggle MCP Server",
+        "category": "ETL Tools"
+      },
+      {
+        "command": "etl-code.restartMcpServer",
+        "title": "ETL: Restart MCP Server",
+        "category": "ETL Tools"
+      },
+      {
+        "command": "etl-code.showMcpConfig",
+        "title": "ETL: Show MCP Configuration for Bob",
+        "category": "ETL Tools"
       }
     ],
     "viewsContainers": {
@@ -44,6 +69,31 @@
           "name": "Node Details"
         }
       ]
+    },
+    "configuration": {
+      "title": "ETL Code",
+      "properties": {
+        "etl-code.mcp.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the MCP server when the extension activates"
+        },
+        "etl-code.mcp.port": {
+          "type": "number",
+          "default": 3001,
+          "description": "Port for HTTP/SSE mode (when not using stdio)"
+        }
+      }
+    },
+    "mcpServers": {
+      "etl-code": {
+        "command": "node",
+        "args": [
+          "${extensionPath}/dist/mcp/server-entry.js"
+        ],
+        "env": {},
+        "description": "ETL Code MCP Server - Provides AI tools for ETL pipeline execution and database schema preview"
+      }
     }
   },
   "scripts": {
@@ -77,7 +127,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/sqlite3": "^5.1.0",
-    "@types/vscode": "^1.120.0",
+    "@types/vscode": "^1.85.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "autoprefixer": "^10.5.0",

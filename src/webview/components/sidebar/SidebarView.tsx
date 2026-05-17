@@ -11,6 +11,14 @@ const SidebarView = () => {
     });
   };
 
+  const configureMcp = () => {
+    vscode.postMessage({ type: 'configureMcp' });
+  };
+
+  const openMcpGuide = () => {
+    vscode.postMessage({ type: 'openMcpGuide' });
+  };
+
   const sections = [
     {
       title: 'Sources',
@@ -59,6 +67,30 @@ const SidebarView = () => {
 
   return (
     <div className="p-2 select-none">
+      {/* MCP Configuration Section */}
+      <div className="mb-6 pb-4 border-b border-vscode-panel-border">
+        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2 px-1">
+          AI Assistant Setup
+        </div>
+        <div className="flex flex-col gap-1">
+          <button
+            onClick={configureMcp}
+            className="flex items-center gap-3 w-full p-2 text-xs text-left bg-vscode-button-bg hover:bg-vscode-button-hover text-vscode-button-fg rounded transition-all hover:translate-x-1"
+          >
+            <i className="fa-solid fa-robot w-4 text-center opacity-80"></i>
+            Configure MCP Server
+          </button>
+          <button
+            onClick={openMcpGuide}
+            className="flex items-center gap-3 w-full p-2 text-xs text-left bg-vscode-button-secondary-bg hover:bg-vscode-button-secondary-hover text-vscode-button-secondary-fg rounded transition-all hover:translate-x-1"
+          >
+            <i className="fa-solid fa-book w-4 text-center opacity-80"></i>
+            Setup Guide
+          </button>
+        </div>
+      </div>
+
+      {/* Node Sections */}
       {sections.map(section => (
         <div key={section.title} className="mb-6">
           <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2 px-1">

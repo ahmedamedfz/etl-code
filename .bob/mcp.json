@@ -2,7 +2,7 @@
     "mcpServers": {
         "etl-code": {
             "command": "node",
-            "args": ["/Users/abunawas/Documents/etl-code/dist/mcp/server-entry.js"]
+            "args": ["${workspaceFolder}/dist/mcp/server-entry.js"]
         }
     }
 }

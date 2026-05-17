@@ -1,12 +1,23 @@
 # MCP Server Setup Guide
 
-This guide explains how to connect IBM Bob (Cline AI Assistant) to the ETL MCP server in this VSCode extension.
+This guide explains how the ETL MCP server integrates with IBM Bob (Cline AI Assistant) in this VSCode extension.
 
 ## Overview
 
 The ETL MCP server provides AI assistants with tools to:
 - Execute ETL pipelines with CSV data and AI-generated mappings
 - Preview database schemas for mapping assistance
+
+## How It Works
+
+**Bob/Cline automatically spawns the MCP server as a child process when it detects the configuration.**
+
+When you press F5 to debug the extension:
+1. The Extension Development Host window opens
+2. Bob/Cline in that window reads `.bob/mcp.json` configuration
+3. Bob/Cline spawns the MCP server as a separate process: `node dist/mcp/server-entry.js`
+4. The server runs in stdio mode and communicates with Bob/Cline
+5. When you close the Extension Development Host, Bob/Cline terminates the server process
 
 ## Prerequisites
 
@@ -15,13 +26,13 @@ The ETL MCP server provides AI assistants with tools to:
    pnpm run compile
    ```
 
-2. **Ensure Cline extension is installed** in VSCode
+2. **Ensure Bob/Cline extension is installed** in VSCode
 
 ## Connection Methods
 
-### Method 1: Stdio Transport (Recommended for Local Development)
+### Method 1: Stdio Transport (Automatic - Recommended)
 
-This is the standard way to connect MCP servers to AI assistants like Cline/Bob.
+The MCP server automatically starts in stdio mode when the extension runs.
 
 #### Configuration
 
@@ -70,18 +81,20 @@ To enable this MCP server in Cline:
 
 3. **Restart Cline/VSCode** to load the new MCP server
 
-#### Manual Testing
+#### Manual Testing (Optional)
 
-You can test the MCP server manually:
+If you need to test the MCP server independently:
 
 ```bash
-# Run in stdio mode (for Cline connection)
+# Run in stdio mode (standalone)
 pnpm run mcp:stdio
 
 # The server will wait for MCP protocol messages on stdin
 ```
 
-### Method 2: HTTP/SSE Transport (For Remote Access)
+**Note:** When running the extension (F5), you don't need to manually start the server - it starts automatically!
+
+### Method 2: HTTP/SSE Transport (For Remote Access - Manual Start Required)
 
 If you need remote access or prefer HTTP transport:
 
@@ -150,7 +163,7 @@ Gets the mock Oracle database schema for mapping assistance.
 
 ## Troubleshooting
 
-### Server Not Connecting
+### Server Not Appearing in Extension Development Host
 
 1. **Verify the build**: Ensure `dist/mcp/server-entry.js` exists
    ```bash
@@ -162,17 +175,26 @@ Gets the mock Oracle database schema for mapping assistance.
    pnpm run compile
    ```
 
-3. **Test manually**: Run the server in stdio mode and check for errors
-   ```bash
-   pnpm run mcp:stdio
-   ```
+3. **Verify `.bob/mcp.json` exists** in the workspace root with correct configuration
 
-### Cline Not Detecting the Server
+4. **Check the path**: Ensure `${workspaceFolder}/dist/mcp/server-entry.js` resolves correctly
 
-1. **Restart VSCode** completely
-2. **Check Cline logs** for MCP connection errors
-3. **Verify the path** in the configuration matches your workspace
-4. **Ensure node is in PATH**: Test with `node --version`
+### Bob/Cline Not Detecting the Server
+
+1. **Open Extension Development Host** (press F5)
+2. **Open Bob/Cline in the Extension Development Host window** (not the main window)
+3. **Check Bob's MCP servers list** - look for "etl-code"
+4. **Restart Bob/Cline** in the Extension Development Host if needed
+5. **Check Bob's logs** for MCP connection errors
+
+### Server Shows in Wrong Window
+
+**Important**: The MCP server should appear in the **Extension Development Host** window, not the main VSCode window where you pressed F5.
+
+- ✅ Correct: Bob/Cline in Extension Development Host sees "etl-code" MCP server
+- ❌ Wrong: Bob/Cline in main VSCode window sees "etl-code" MCP server
+
+If the server appears in the main window, Bob is reading the config from the wrong location. Ensure you're checking Bob in the Extension Development Host window.
 
 ### Permission Issues
 

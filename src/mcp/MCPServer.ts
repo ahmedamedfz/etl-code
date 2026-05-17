@@ -11,6 +11,8 @@ import { OracleMockConnector } from "../db/OracleMockConnector";
 export class ETLMCPServer {
     private server: Server;
     private engine: ExecutionEngine;
+    private httpServer?: any;
+    private transport?: StdioServerTransport | SSEServerTransport;
 
     constructor() {
         this.engine = new ExecutionEngine();
@@ -114,9 +116,9 @@ export class ETLMCPServer {
     }
 
     public async startStdio() {
-        const transport = new StdioServerTransport();
-        await this.server.connect(transport);
-        console.log("MCP Stdio Server running...");
+        this.transport = new StdioServerTransport();
+        await this.server.connect(this.transport);
+        console.error("MCP Stdio Server running...");
     }
 
     public async startHttp(port: number = 3001) {
@@ -127,6 +129,7 @@ export class ETLMCPServer {
 
         app.get("/sse", async (req, res) => {
             transport = new SSEServerTransport("/message", res);
+            this.transport = transport;
             await this.server.connect(transport);
         });
 
@@ -138,8 +141,38 @@ export class ETLMCPServer {
             }
         });
 
-        app.listen(port, () => {
-            console.log(`MCP SSE Server listening on port ${port}`);
+        this.httpServer = app.listen(port, () => {
+            console.error(`MCP SSE Server listening on port ${port}`);
         });
+    }
+
+    public async shutdown() {
+        console.error("Shutting down MCP Server...");
+        
+        try {
+            // Close the MCP server
+            if (this.server) {
+                await this.server.close();
+            }
+
+            // Close HTTP server if running
+            if (this.httpServer) {
+                await new Promise<void>((resolve, reject) => {
+                    this.httpServer.close((err: any) => {
+                        if (err) reject(err);
+                        else resolve();
+                    });
+                });
+            }
+
+            // Close transport if exists
+            if (this.transport) {
+                await this.transport.close();
+            }
+
+            console.error("MCP Server shut down successfully");
+        } catch (error) {
+            console.error("Error shutting down MCP Server:", error);
+        }
     }
 }
