@@ -25,10 +25,19 @@ export interface AIResponseSchema {
     explanation?: string;
 }
 
+export interface CompatibilityWarning {
+    sourceField: string;
+    targetField: string;
+    sourceType: string;
+    targetType: string;
+    message: string;
+}
+
 export interface ExecutionResultSchema {
     success: boolean;
     rowsAffected?: number;
     error?: string;
     executionTimeMs: number;
     logs: string[];
+    warnings: CompatibilityWarning[];
 }

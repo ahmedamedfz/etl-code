@@ -48,7 +48,10 @@ export class CSVProcessor {
         });
         if (isBoolean) return 'boolean';
 
-        const isDate = nonNulls.every(v => !isNaN(Date.parse(v)));
+        // Strict date check: must match ISO 8601 or YYYY-MM-DD patterns
+        // Date.parse() is intentionally avoided — it accepts strings like "DEV-001" on some engines
+        const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
+        const isDate = nonNulls.every(v => ISO_DATE_RE.test(String(v).trim()));
         if (isDate) return 'date';
 
         return 'string';

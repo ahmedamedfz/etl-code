@@ -1,0 +1,9 @@
+{
+  "mapping": [
+    { "sourceField": "id",         "targetField": "user_id",       "confidenceScore": 0.99 },
+    { "sourceField": "full_name",  "targetField": "full_name",     "confidenceScore": 0.97 },
+    { "sourceField": "age",        "targetField": "user_age",      "confidenceScore": 0.92, "transformLogic": "Number(value)" },
+    { "sourceField": "email",      "targetField": "email_address", "confidenceScore": 1.0  }
+  ],
+  "explanation": "Precomputed offline mapping for demo curated dataset. Confidence scores reflect semantic similarity."
+}

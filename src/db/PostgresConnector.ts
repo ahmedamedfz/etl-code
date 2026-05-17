@@ -1,11 +1,32 @@
 import { Pool, PoolConfig } from 'pg';
 import { IDatabaseConnector } from '../types';
 
+export interface PostgresConnectorConfig extends PoolConfig {
+    /**
+     * Set to true for cloud-hosted Postgres (e.g. Supabase, RDS) that requires
+     * SSL but uses a self-signed or Supabase-managed certificate.
+     * When true: `ssl: { rejectUnauthorized: false }` is applied.
+     */
+    sslMode?: 'require' | 'disable';
+}
+
 export class PostgresConnector implements IDatabaseConnector {
     private pool: Pool;
 
-    constructor(config: PoolConfig) {
-        this.pool = new Pool(config);
+    constructor(config: PostgresConnectorConfig) {
+        const poolConfig: PoolConfig = { ...config };
+
+        // Supabase and most cloud Postgres providers require SSL
+        if (config.sslMode === 'require' || !poolConfig.ssl) {
+            poolConfig.ssl = { rejectUnauthorized: false };
+        } else if (config.sslMode === 'disable') {
+            poolConfig.ssl = false;
+        }
+
+        // Remove custom key before passing to pg
+        delete (poolConfig as any).sslMode;
+
+        this.pool = new Pool(poolConfig);
     }
 
     async connect(): Promise<void> {
