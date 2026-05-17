@@ -1,48 +1,78 @@
-# Welcome to your VS Code Extension
+# VS Code Extension Quickstart
 
-## What's in the folder
+This project is a VS Code extension named `etl-code`.
 
-* This folder contains all of the files necessary for your extension.
-* `package.json` - this is the manifest file in which you declare your extension and command.
-  * The sample plugin registers a command and defines its title and command name. With this information VS Code can show the command in the command palette. It doesn’t yet need to load the plugin.
-* `src/extension.ts` - this is the main file where you will provide the implementation of your command.
-  * The file exports one function, `activate`, which is called the very first time your extension is activated (in this case by executing the command). Inside the `activate` function we call `registerCommand`.
-  * We pass the function containing the implementation of the command as the second parameter to `registerCommand`.
+## First Run
 
-## Setup
+```bash
+pnpm install
+pnpm run compile
+```
 
-* install the recommended extensions (amodio.tsl-problem-matcher, ms-vscode.extension-test-runner, and dbaeumer.vscode-eslint)
+Then press `F5` in VS Code to open an Extension Development Host.
 
+In the development host:
 
-## Get up and running straight away
+1. Open the command palette.
+2. Run `ETL Code: Open ETL Canvas`.
+3. Use the `ETL Tools` activity bar container to browse nodes and inspect node details.
 
-* Press `F5` to open a new window with your extension loaded.
-* Run your command from the command palette by pressing (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac) and typing `Hello World`.
-* Set breakpoints in your code inside `src/extension.ts` to debug your extension.
-* Find output from your extension in the debug console.
+## Commands and Views
 
-## Make changes
+Commands contributed by `package.json`:
 
-* You can relaunch the extension from the debug toolbar after changing code in `src/extension.ts`.
-* You can also reload (`Ctrl+R` or `Cmd+R` on Mac) the VS Code window with your extension to load your changes.
+- `etl-code.openCanvas` - opens the ETL Canvas.
+- `etl-code.helloWorld` - sample command retained from the extension scaffold.
 
+Views contributed by `package.json`:
 
-## Explore the API
+- `etl-code.nodeSidebar` - node palette.
+- `etl-code.nodeDetails` - selected node details and workflow actions.
 
-* You can open the full set of our API when you open the file `node_modules/@types/vscode/index.d.ts`.
+## Common Development Commands
 
-## Run tests
+```bash
+pnpm run compile
+pnpm run watch
+pnpm run check-types
+pnpm run lint
+pnpm run test
+```
 
-* Install the [Extension Test Runner](https://marketplace.visualstudio.com/items?itemName=ms-vscode.extension-test-runner)
-* Run the "watch" task via the **Tasks: Run Task** command. Make sure this is running, or tests might not be discovered.
-* Open the Testing view from the activity bar and click the Run Test" button, or use the hotkey `Ctrl/Cmd + ; A`
-* See the output of the test result in the Test Results view.
-* Make changes to `src/test/extension.test.ts` or create new test files inside the `test` folder.
-  * The provided test runner will only consider files matching the name pattern `**.test.ts`.
-  * You can create folders inside the `test` folder to structure your tests any way you want.
+## MCP Development
 
-## Go further
+Build before running the MCP server:
 
-* Reduce the extension size and improve the startup time by [bundling your extension](https://code.visualstudio.com/api/working-with-extensions/bundling-extension).
-* [Publish your extension](https://code.visualstudio.com/api/working-with-extensions/publishing-extension) on the VS Code extension marketplace.
-* Automate builds by setting up [Continuous Integration](https://code.visualstudio.com/api/working-with-extensions/continuous-integration).
+```bash
+pnpm run compile
+```
+
+Start stdio mode:
+
+```bash
+pnpm run mcp:stdio
+```
+
+Start HTTP/SSE mode:
+
+```bash
+pnpm run mcp:http
+```
+
+Start HTTP/SSE on a custom port:
+
+```bash
+pnpm run mcp:http:custom 8080
+```
+
+The extension starts the HTTP/SSE MCP server on port `3001` when activated.
+
+## Testing in VS Code
+
+Run `pnpm run compile` first. Then use the VS Code test runner or run:
+
+```bash
+pnpm run test
+```
+
+Tests live under `src/test/`.

@@ -1,127 +1,130 @@
 # MCP Auto-Configuration
 
-This extension automatically configures the MCP (Model Context Protocol) server for IBM Bob when installed.
+The extension configures ETL Code MCP connections automatically when it activates.
 
-## What Happens on Installation
+## What Activation Does
 
-When you install and activate the ETL Code extension:
+`src/extension.ts` calls `configureEtlCodeMcpServer()` and refreshes MCP configuration for Bob and VS Code. The operation is idempotent, so repeated activation repairs missing, empty, or stale config files.
 
-1. **Global MCP Configuration**: The extension automatically creates/updates the global MCP settings file at:
-   ```
-   ~/.bob/settings/mcp_settings.json
-   ```
+It writes HTTP/SSE config for Bob and stdio config for VS Code, then starts the MCP HTTP/SSE server on port `3001`.
 
-2. **Server Configuration**: It adds the following configuration:
-   ```json
-   {
-     "mcpServers": {
-       "etl-code-http": {
-         "url": "http://localhost:3001/sse",
-         "transport": "sse"
-       }
-     }
-   }
-   ```
+## Files Written
 
-3. **MCP Server Startup**: The MCP server automatically starts on port 3001 when the extension activates.
+Bob HTTP/SSE config:
 
-## Features
+```text
+~/.bob/settings/mcp_settings.json
+~/.bob/mcp.json
+<workspace>/.bob/mcp.json
+```
 
-- ✅ **Automatic Configuration**: No manual setup required
-- ✅ **Smart Detection**: Only configures if not already set up
-- ✅ **User Notifications**: Shows success/error messages
-- ✅ **Persistent Settings**: Configuration persists across VS Code restarts
-- ✅ **Bob Integration**: Ready for IBM Bob to connect immediately
+VS Code stdio config:
 
-## Verification
+```text
+<workspace>/.vscode/mcp-settings.json
+<workspace>/.vscode/mcp.json
+```
 
-After installing the extension, you can verify the configuration:
+Global VS Code setting:
 
-1. Check the global settings file:
-   ```bash
-   cat ~/.bob/settings/mcp_settings.json
-   ```
+```text
+mcp.servers.etl-code
+```
 
-2. Look for the success notification in VS Code:
-   ```
-   ETL Code MCP server configured at http://localhost:3001/sse
-   ```
+## Bob Server Entry
 
-3. Check the VS Code Output panel (View → Output → ETL Code) for:
-   ```
-   MCP SSE Server listening on port 3001
-   ```
+```json
+{
+  "mcpServers": {
+    "etl-code-http": {
+      "url": "http://localhost:3001/sse",
+      "transport": "sse"
+    }
+  }
+}
+```
 
-## Manual Configuration (Optional)
+## VS Code Stdio Entry
 
-If you need to manually configure or change the port:
+```json
+{
+  "mcpServers": {
+    "etl-code": {
+      "command": "node",
+      "args": [
+        "<extension>/dist/mcp/server-entry.js"
+      ],
+      "env": {},
+      "disabled": false
+    }
+  }
+}
+```
 
-```typescript
-import { configureEtlCodeMcpServer } from './utils/mcpConfig';
+For `.vscode/mcp.json`, the server is written under `servers` with `type: "stdio"`.
 
-// Configure with custom port
-configureEtlCodeMcpServer(3002);
+## Runtime Behavior
+
+On activation, the extension:
+
+1. Resolves the extension path and workspace path.
+2. Updates Bob and VS Code MCP config files.
+3. Updates the global VS Code `mcp.servers` setting.
+4. Starts `ETLMCPServer.startHttp(3001)`.
+5. Shows a VS Code notification with the configured SSE endpoint.
+
+## Manual Testing
+
+Build first:
+
+```bash
+pnpm run compile
+```
+
+Run stdio:
+
+```bash
+pnpm run mcp:stdio
+```
+
+Run HTTP/SSE:
+
+```bash
+pnpm run mcp:http
+```
+
+Verify files:
+
+```bash
+cat ~/.bob/settings/mcp_settings.json
+cat ~/.bob/mcp.json
+cat .vscode/mcp-settings.json
+cat .vscode/mcp.json
 ```
 
 ## Troubleshooting
 
-### Configuration Failed
+If configuration fails:
 
-If you see "Failed to configure MCP settings":
-- Check file permissions for `~/.bob/settings/`
-- Ensure the directory is writable
-- Try creating the directory manually: `mkdir -p ~/.bob/settings`
+- Check write permissions for `~/.bob`, `<workspace>/.bob`, and `<workspace>/.vscode`.
+- Rebuild with `pnpm run compile`.
+- Restart the Extension Development Host.
 
-### Server Failed to Start
+If Bob cannot connect:
 
-If the MCP server fails to start:
-- Check if port 3001 is already in use
-- Look for error messages in the VS Code Output panel
-- Try restarting VS Code
+- Confirm the extension is active.
+- Confirm the endpoint is `http://localhost:3001/sse`.
+- Check whether port `3001` is already in use.
+- Restart Bob after the config files are refreshed.
 
-### Bob Cannot Connect
+If VS Code MCP cannot launch stdio:
 
-If IBM Bob cannot connect to the MCP server:
-1. Verify the configuration file exists: `~/.bob/settings/mcp_settings.json`
-2. Check the server is running (look for "MCP SSE Server listening" in Output)
-3. Ensure Bob is configured to read from `~/.bob/settings/mcp_settings.json`
-4. Restart Bob after the extension is installed
-
-## Uninstallation
-
-When you uninstall the extension:
-- The MCP server stops automatically
-- The configuration in `~/.bob/settings/mcp_settings.json` remains
-- To remove the configuration manually:
-  ```bash
-  # Edit the file and remove the "etl-code-http" entry
-  nano ~/.bob/settings/mcp_settings.json
-  ```
-
-## Technical Details
-
-### Configuration Location
-- **macOS/Linux**: `~/.bob/settings/mcp_settings.json`
-- **Windows**: `%USERPROFILE%\.bob\settings\mcp_settings.json`
-
-### Server Details
-- **Protocol**: SSE (Server-Sent Events)
-- **Default Port**: 3001
-- **Endpoint**: `/sse`
-- **Message Endpoint**: `/message`
-
-### Available Tools
-
-The MCP server exposes the following tools to Bob:
-- `execute_etl_pipeline` - Execute ETL with mock database
-- `execute_etl_pipeline_postgres` - Execute ETL with PostgreSQL/Supabase
-- `preview_database_schema` - View available database schemas
-- `test_postgres_connection` - Test database connectivity
-- `generate_etl_workflow` - Generate workflow from natural language
+- Confirm `dist/mcp/server-entry.js` exists.
+- Confirm the configured path points to the active extension or workspace build.
 
 ## Code Reference
 
-The auto-configuration is implemented in:
-- `src/utils/mcpConfig.ts` - Configuration utilities
-- `src/extension.ts` - Activation logic
-- `src/mcp/MCPServer.ts` - MCP server implementation
+- `src/utils/mcpConfig.ts`
+- `src/extension.ts`
+- `src/mcp/MCPServer.ts`
+- `src/mcp/server-entry.ts`

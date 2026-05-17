@@ -1,31 +1,34 @@
-# MCP Server Setup Guide
+# MCP Server Setup
 
-This guide explains how to connect IBM Bob (Cline AI Assistant) to the ETL MCP server in this VSCode extension.
+This guide explains how to connect an MCP-compatible assistant to the ETL Code MCP server.
 
-## Overview
+## Build First
 
-The ETL MCP server provides AI assistants with tools to:
-- Execute ETL pipelines with CSV data and AI-generated mappings
-- Preview database schemas for mapping assistance
+```bash
+pnpm run compile
+```
 
-## Prerequisites
+The MCP entrypoint is generated at:
 
-1. **Build the project** to compile TypeScript to JavaScript:
-   ```bash
-   pnpm run compile
-   ```
+```text
+dist/mcp/server-entry.js
+```
 
-2. **Ensure Cline extension is installed** in VSCode
+## Stdio Transport
 
-## Connection Methods
+Use stdio for local MCP clients that launch the server process.
 
-### Method 1: Stdio Transport (Recommended for Local Development)
+```bash
+pnpm run mcp:stdio
+```
 
-This is the standard way to connect MCP servers to AI assistants like Cline/Bob.
+Equivalent command:
 
-#### Configuration
+```bash
+node dist/mcp/server-entry.js
+```
 
-The MCP configuration is already set up in `.vscode/mcp-settings.json`:
+Example MCP configuration:
 
 ```json
 {
@@ -33,7 +36,7 @@ The MCP configuration is already set up in `.vscode/mcp-settings.json`:
     "etl-code": {
       "command": "node",
       "args": [
-        "${workspaceFolder}/dist/mcp/server-entry.js"
+        "/absolute/path/to/etl-code/dist/mcp/server-entry.js"
       ],
       "env": {},
       "disabled": false
@@ -42,213 +45,124 @@ The MCP configuration is already set up in `.vscode/mcp-settings.json`:
 }
 ```
 
-#### Cline Configuration
+## HTTP/SSE Transport
 
-To enable this MCP server in Cline:
-
-1. **Open Cline Settings** in VSCode:
-   - Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
-   - Type "Cline: Open Settings"
-   - Or click the settings icon in Cline's interface
-
-2. **Add MCP Server Configuration**:
-   - Navigate to the "MCP Servers" section
-   - Add the following configuration:
-
-   ```json
-   {
-     "etl-code": {
-       "command": "node",
-       "args": [
-         "/Users/abunawas/Documents/etl-code/dist/mcp/server-entry.js"
-       ]
-     }
-   }
-   ```
-
-   **Note**: Replace the path with your actual workspace path. You can use `${workspaceFolder}` if Cline supports it.
-
-3. **Restart Cline/VSCode** to load the new MCP server
-
-#### Manual Testing
-
-You can test the MCP server manually:
+Use HTTP/SSE for Bob or clients that connect to a running endpoint.
 
 ```bash
-# Run in stdio mode (for Cline connection)
-pnpm run mcp:stdio
-
-# The server will wait for MCP protocol messages on stdin
+pnpm run mcp:http
 ```
 
-### Method 2: HTTP/SSE Transport (For Remote Access)
+Default endpoint:
 
-If you need remote access or prefer HTTP transport:
+```text
+http://localhost:3001/sse
+```
 
-#### Start the HTTP Server
+Custom port:
 
 ```bash
-# Start on default port 3001
-pnpm run mcp:http
-
-# Or start on a custom port
 pnpm run mcp:http:custom 8080
 ```
 
-#### Cline Configuration for HTTP
+Example MCP configuration:
 
 ```json
 {
-  "etl-code": {
-    "url": "http://localhost:3001/sse",
-    "transport": "sse"
+  "mcpServers": {
+    "etl-code-http": {
+      "url": "http://localhost:3001/sse",
+      "transport": "sse"
+    }
   }
 }
 ```
 
-## Available Tools
+## Automatic Extension Startup
 
-Once connected, Bob/Cline will have access to these MCP tools:
+When the VS Code extension activates, it:
 
-### 1. `execute_etl_pipeline`
+- Starts the HTTP/SSE MCP server on port `3001`.
+- Writes Bob HTTP/SSE MCP configuration files.
+- Writes workspace VS Code MCP configuration files.
+- Writes global VS Code `mcp.servers` configuration for the stdio server.
 
-Executes the ETL pipeline with CSV content and AI-generated mapping.
+See [MCP-AUTO-CONFIG.md](MCP-AUTO-CONFIG.md).
 
-Execution is intentionally gated. Clients must use this sequence in the same MCP session:
+## Resources
 
-1. Call `get_etl_workflow_schema`
-2. Call `generate_etl_workflow`
-3. Show the generated workflow to the user and receive explicit approval
-4. Call `review_etl_workflow` with `workflow`, `userReviewed: true`, and the user's approval text in `userResponse`
-5. Call `execute_etl_pipeline` or `execute_etl_pipeline_postgres` with the returned `workflowReviewToken`
+The server exposes these JSON resources:
 
-**Parameters:**
-- `csvContent` (string, required): The raw CSV data to process
-- `tableName` (string, required): Target database table name
-- `aiMappingJson` (string, required): JSON string containing AI-generated mapping logic
-- `workflowReviewToken` (string, required): Token returned by `review_etl_workflow`
+- `etl://resources/compiler-pipeline`
+- `etl://resources/node-catalog`
+- `etl://resources/validation-rules`
+- `etl://resources/propagation-rules`
+- `etl://resources/graph-spec`
+- `etl://resources/prompt-templates`
+- `etl://resources/example-patterns`
 
-**Example Usage:**
-```typescript
-{
-  "csvContent": "name,age,email\nJohn,30,john@example.com",
-  "tableName": "users",
-  "aiMappingJson": "{\"name\":\"name\",\"age\":\"user_age\",\"email\":\"email_address\"}",
-  "workflowReviewToken": "<token from review_etl_workflow>"
-}
-```
+## Tools
 
-**Returns:**
-- Success: Execution results with processed records
-- Error: Error message with details
+Workflow creation and review:
 
-### 2. `preview_database_schema`
+- `get_mcp_tool_schemas`
+- `get_etl_workflow_schema`
+- `generate_etl_workflow`
+- `review_etl_workflow`
+- `validate_graph`
+- `compile_etl`
+- `get_node_definition`
 
-Gets the mock Oracle database schema for mapping assistance.
+Execution and data access:
 
-**Parameters:** None
+- `execute_etl_pipeline`
+- `execute_etl_pipeline_postgres`
+- `execute_etl_pipelines_postgres`
+- `preview_database_schema`
+- `test_postgres_connection`
 
-**Returns:**
-```json
-[
-  { "name": "user_id", "type": "number" },
-  { "name": "name", "type": "string" },
-  { "name": "user_age", "type": "number" },
-  { "name": "email_address", "type": "string" }
-]
-```
+## Required Execution Sequence
+
+Execution is blocked until the workflow has been generated and explicitly reviewed in the same MCP session:
+
+1. Call `get_etl_workflow_schema`.
+2. Call `generate_etl_workflow`.
+3. Show the returned workflow JSON to the user.
+4. Ask whether the workflow is correct.
+5. Call `review_etl_workflow` with:
+   - `workflow`
+   - `userReviewed: true`
+   - `userResponse` containing the user's approval text
+6. Call `execute_etl_pipeline` or `execute_etl_pipeline_postgres` with the returned `workflowReviewToken`.
+
+## Tool Notes
+
+`generate_etl_workflow` imports the generated workflow into the VS Code canvas when the extension is connected.
+
+`execute_etl_pipeline` uses the built-in mock Oracle connector.
+
+`execute_etl_pipeline_postgres` accepts explicit connection fields, credentials embedded in the description, or `SUPABASE_*` environment variables.
+
+`execute_etl_pipelines_postgres` is an alias for clients that pluralize the tool name.
 
 ## Troubleshooting
 
-### Server Not Connecting
-
-1. **Verify the build**: Ensure `dist/mcp/server-entry.js` exists
-   ```bash
-   ls -la dist/mcp/server-entry.js
-   ```
-
-2. **Check compilation**: Run the compile command
-   ```bash
-   pnpm run compile
-   ```
-
-3. **Test manually**: Run the server in stdio mode and check for errors
-   ```bash
-   pnpm run mcp:stdio
-   ```
-
-### Cline Not Detecting the Server
-
-1. **Restart VSCode** completely
-2. **Check Cline logs** for MCP connection errors
-3. **Verify the path** in the configuration matches your workspace
-4. **Ensure node is in PATH**: Test with `node --version`
-
-### Permission Issues
-
-If you get permission errors:
+If the server cannot start:
 
 ```bash
-chmod +x dist/mcp/server-entry.js
+pnpm run compile
+ls -la dist/mcp/server-entry.js
+pnpm run mcp:stdio
 ```
 
-## Architecture
-
-```
-┌─────────────────┐
-│  IBM Bob/Cline  │
-│  (AI Assistant) │
-└────────┬────────┘
-         │ MCP Protocol
-         │
-┌────────▼────────┐
-│  Transport      │
-│  - Stdio        │
-│  - HTTP/SSE     │
-└────────┬────────┘
-         │
-┌────────▼────────┐
-│  ETLMCPServer   │
-│  (server-entry) │
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    │         │
-┌───▼──┐  ┌──▼───────────────┐
-│ Tool │  │ Tool             │
-│ #1   │  │ #2               │
-└───┬──┘  └──┬───────────────┘
-    │        │
-    │        │
-┌───▼────────▼──────────────┐
-│  ExecutionEngine          │
-│  Database Connectors      │
-│  CSV Processing           │
-└───────────────────────────┘
-```
-
-## Development
-
-### Adding New Tools
-
-To add new MCP tools, edit `src/mcp/MCPServer.ts`:
-
-1. Add tool definition in `ListToolsRequestSchema` handler
-2. Add tool implementation in `CallToolRequestSchema` handler
-3. Rebuild the project: `pnpm run compile`
-4. Restart the MCP server
-
-### Debugging
-
-Enable debug logging by setting environment variables:
+If HTTP/SSE cannot bind to port `3001`, start a custom port:
 
 ```bash
-DEBUG=mcp:* pnpm run mcp:stdio
+pnpm run mcp:http:custom 3002
 ```
 
-## References
+If execution is rejected, restart the MCP workflow sequence:
 
-- [MCP SDK Documentation](https://github.com/modelcontextprotocol/sdk)
-- [Cline Extension](https://github.com/cline/cline)
-- Project MCP Server: `src/mcp/MCPServer.ts`
-- Server Entry Point: `src/mcp/server-entry.ts`
+```text
+get_etl_workflow_schema -> generate_etl_workflow -> user review -> review_etl_workflow -> execute
+```

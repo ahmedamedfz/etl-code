@@ -1,71 +1,122 @@
-# etl-code README
+# etl-code
 
-This is the README for your extension "etl-code". After writing up a brief description, we recommend including the following sections.
+`etl-code` is a VS Code extension for building ETL workflows visually and exposing the same workflow engine through an MCP server for AI assistants such as IBM Bob or Cline.
 
-## Features
+The extension provides:
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+- A React Flow ETL canvas opened with `ETL Code: Open ETL Canvas`.
+- Activity bar views for node selection and node details.
+- Workflow JSON import/export from the canvas.
+- MCP resources for the semantic ETL contracts in `resources/`.
+- MCP tools for workflow generation, validation, review, and execution.
+- Automatic Bob and VS Code MCP configuration on activation.
+- Local mock execution and PostgreSQL/Supabase execution paths.
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- VS Code `^1.100.0`
+- Node.js and `pnpm`
+- Optional: IBM Bob, Cline, or another MCP-compatible assistant
+- Optional: PostgreSQL/Supabase credentials for real database execution
 
-## Extension Settings
+Install dependencies:
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+```bash
+pnpm install
+```
 
-For example:
+Build the extension:
 
-This extension contributes the following settings:
+```bash
+pnpm run compile
+```
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+## Development
 
-## Known Issues
+Run the extension in a VS Code Extension Development Host:
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+1. Open this repository in VS Code.
+2. Run `pnpm install`.
+3. Run `pnpm run compile`.
+4. Press `F5`.
+5. In the development host, run `ETL Code: Open ETL Canvas`.
+
+Useful scripts:
+
+```bash
+pnpm run compile       # type-check, lint, build CSS, and bundle
+pnpm run watch         # watch TypeScript, esbuild, and CSS
+pnpm run check-types   # TypeScript only
+pnpm run lint          # ESLint
+pnpm run test          # VS Code test runner
+pnpm run mcp:stdio     # start MCP over stdio
+pnpm run mcp:http      # start MCP over HTTP/SSE on port 3001
+```
+
+## Workflow JSON
+
+The canvas exports version-1 workflow documents:
+
+```json
+{
+  "version": 1,
+  "format": "full",
+  "nodes": [],
+  "edges": []
+}
+```
+
+Use `Export Workflow JSON` for full React Flow-compatible data and `Export Prompt (MCP)` for a trimmed prompt-oriented document. Use `Import Workflow JSON` to paste or load a workflow back into the canvas.
+
+## MCP Server
+
+The MCP server is implemented in `src/mcp/MCPServer.ts` and started by `src/mcp/server-entry.ts`.
+
+Transports:
+
+- Stdio: `pnpm run mcp:stdio`
+- HTTP/SSE: `pnpm run mcp:http`
+- Custom HTTP/SSE port: `pnpm run mcp:http:custom 8080`
+
+The extension also starts the HTTP/SSE server on port `3001` during activation.
+
+See [MCP-SETUP.md](MCP-SETUP.md) and [MCP-AUTO-CONFIG.md](MCP-AUTO-CONFIG.md) for connection details.
+
+## MCP Workflow Safety
+
+Execution tools are intentionally review-gated. MCP clients should follow this order:
+
+1. `get_etl_workflow_schema`
+2. `generate_etl_workflow`
+3. Show the generated workflow to the user.
+4. `review_etl_workflow` with `userReviewed: true` and the user's approval text.
+5. Execute with `execute_etl_pipeline` or `execute_etl_pipeline_postgres` using the returned `workflowReviewToken`.
+
+## Semantic Resources
+
+The compiler and MCP resources are driven by JSON contracts in `resources/`:
+
+- `compiler-pipeline.json`
+- `etl-graph-generator-specification.json`
+- `node-catalog.json`
+- `field-propagation-rules.json`
+- `validation-rules.json`
+- `prompt-templates.json`
+- `example-patterns.json`
+
+These resources are loaded through `src/semantic/ResourceRegistry.ts` and exposed through MCP resource URIs such as `etl://resources/node-catalog`.
+
+## Key Source Areas
+
+- `src/extension.ts` - VS Code activation, view registration, MCP auto-configuration.
+- `src/CanvasPanel.ts` - ETL canvas webview host and workflow import/export bridge.
+- `src/webview/` - React canvas, sidebar, details, node utilities, workflow serialization.
+- `src/mcp/` - MCP server, workflow generation, server entrypoint, tool-flow logging.
+- `src/compiler/` - compiler pipeline, validation, propagation, node factory, type utilities.
+- `src/pipeline/` - execution engine and logging.
+- `src/db/` - mock Oracle, SQLite, and PostgreSQL connectors.
+- `src/semantic/` - semantic resource loading and registry.
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+See [CHANGELOG.md](CHANGELOG.md).
