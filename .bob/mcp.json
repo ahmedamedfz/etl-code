@@ -1,8 +1,15 @@
 {
     "mcpServers": {
         "etl-code": {
-            "command": "node",
-            "args": ["/Users/abunawas/Documents/etl-code/dist/mcp/server-entry.js"]
+            "command": "npm",
+            "args": ["run", "mcp:stdio", "--prefix", "${workspaceFolder}"],
+            "env": {
+                "SUPABASE_HOST": "${env:SUPABASE_HOST}",
+                "SUPABASE_PORT": "${env:SUPABASE_PORT}",
+                "SUPABASE_DB": "${env:SUPABASE_DB}",
+                "SUPABASE_USER": "${env:SUPABASE_USER}",
+                "SUPABASE_PASSWORD": "${env:SUPABASE_PASSWORD}"
+            }
         }
     }
 }
