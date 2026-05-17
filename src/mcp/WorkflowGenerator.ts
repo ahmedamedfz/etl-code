@@ -41,6 +41,10 @@ export interface WorkflowJSON {
 
 const DEFAULT_SOURCE_COLUMNS = ['id', 'name', 'value', 'created_at'];
 
+export interface WorkflowGenerationOptions {
+    sourceFields?: WorkflowField[];
+}
+
 // ── Edge builder helper ───────────────────────────────────────────────────────
 function edge(
     src: string, srcHandle: string,
@@ -75,12 +79,14 @@ interface ParsedIntent {
     targetFields:    WorkflowField[];
 }
 
-function parseDescription(desc: string): ParsedIntent {
+function parseDescription(desc: string, options: WorkflowGenerationOptions = {}): ParsedIntent {
     const d = desc.toLowerCase();
     const sourceFile = extractSourceFile(desc);
     const targetTable = extractTargetTable(desc);
     const columnNames = extractColumnNames(desc);
-    const sourceFields = buildSourceFields(columnNames);
+    const sourceFields = options.sourceFields?.length
+        ? normalizeWorkflowFields(options.sourceFields, 'col')
+        : buildSourceFields(columnNames);
     const targetFields = buildTargetFields(sourceFields);
 
     return {
@@ -160,6 +166,14 @@ function buildSourceFields(columnNames: string[]): WorkflowField[] {
     }));
 }
 
+function normalizeWorkflowFields(fields: WorkflowField[], prefix: string): WorkflowField[] {
+    return fields.map((field, index) => ({
+        id: field.id?.startsWith(`${prefix}_`) ? field.id : `${prefix}_${index}`,
+        name: field.name,
+        type: field.type || inferFieldType(field.name)
+    }));
+}
+
 function buildTargetFields(sourceFields: WorkflowField[]): WorkflowField[] {
     return sourceFields.map((field, index) => ({
         id: `sql_col_${index}`,
@@ -192,8 +206,12 @@ function toSnakeCase(value: string): string {
 }
 
 // ── Main generator ────────────────────────────────────────────────────────────
-export function generateWorkflowFromDescription(description: string, _format: string = 'full'): WorkflowJSON {
-    const intent = parseDescription(description);
+export function generateWorkflowFromDescription(
+    description: string,
+    _format: string = 'full',
+    options: WorkflowGenerationOptions = {}
+): WorkflowJSON {
+    const intent = parseDescription(description, options);
     const nodes: WorkflowNode[] = [];
     const edges: WorkflowEdge[] = [];
 

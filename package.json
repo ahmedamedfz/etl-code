@@ -9,7 +9,12 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:etl-code.openCanvas",
+    "onView:etl-code.nodeSidebar",
+    "onView:etl-code.nodeDetails"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [

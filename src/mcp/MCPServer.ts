@@ -15,6 +15,7 @@ import express from "express";
 import cors from "cors";
 import Papa from "papaparse";
 import { createHash, randomUUID } from "crypto";
+import type { Server as HttpServer } from "http";
 
 import { ExecutionEngine } from "../pipeline/ExecutionEngine";
 import { OracleMockConnector } from "../db/OracleMockConnector";
@@ -24,11 +25,13 @@ import { ResourceRegistry } from "../semantic/ResourceRegistry";
 import { CompilerPipeline } from "../compiler/pipeline/CompilerPipeline";
 import { ValidationEngine } from "../compiler/ValidationEngine";
 import { AIResponseSchema } from "../types";
+import { SchemaFetcher } from "../services/SchemaFetcher";
 
 export type WorkflowGeneratedHandler = (workflow: unknown) => void | Promise<void>;
 
 export class ETLMCPServer {
     public readonly server: Server;
+    private httpServer?: HttpServer;
     private engine: ExecutionEngine;
     private registry: ResourceRegistry;
     private compiler: CompilerPipeline;
@@ -166,6 +169,7 @@ export class ETLMCPServer {
                     {
                         name: "execute_etl_pipeline",
                         description:
+                            "Execution-only tool; do not call it to create a workflow or populate the canvas. " +
                             "Executes the ETL pipeline using the built-in mock Oracle connector. " +
                             "Execution is blocked until this MCP session has called get_etl_workflow_schema, " +
                             "then generate_etl_workflow, then review_etl_workflow with explicit userResponse.",
@@ -183,7 +187,8 @@ export class ETLMCPServer {
                     },
                     {
                         name: "execute_etl_pipeline_postgres",
-                        description: "Executes the ETL pipeline against a real PostgreSQL/Supabase database. " +
+                        description: "Execution-only tool; do not call it to create a workflow, populate the canvas, or as a fallback for a create request. " +
+                                     "Executes the ETL pipeline against a real PostgreSQL/Supabase database. " +
                                      "Accepts explicit connection fields or natural-language descriptions containing " +
                                      "Postgres/Supabase credentials and an API URL. Falls back to SUPABASE_* environment variables. " +
                                      "Execution is blocked until this MCP session has called get_etl_workflow_schema, " +
@@ -212,7 +217,7 @@ export class ETLMCPServer {
                     },
                     {
                         name: "execute_etl_pipelines_postgres",
-                        description: "Alias of execute_etl_pipeline_postgres for natural-language clients that pluralize the tool name. " +
+                        description: "Execution-only alias of execute_etl_pipeline_postgres for natural-language clients that pluralize the tool name. " +
                                      "Execution follows get_etl_workflow_schema -> generate_etl_workflow -> review_etl_workflow -> execute. " +
                                      "If automatic execution cannot proceed, ask the user to validate the generated ETL workflow first.",
                         inputSchema: {
@@ -277,7 +282,7 @@ export class ETLMCPServer {
                     },
                     {
                         name: "get_etl_workflow_schema",
-                        description: "Return the JSON schema for ETL workflow documents used by generate_etl_workflow, validate_graph, and review_etl_workflow.",
+                        description: "First step for workflow creation. Return the JSON schema for ETL workflow documents used by generate_etl_workflow, validate_graph, and review_etl_workflow. Always call this before generate_etl_workflow.",
                         inputSchema: {
                             type: "object",
                             properties: {},
@@ -313,8 +318,10 @@ export class ETLMCPServer {
                     {
                         name: "generate_etl_workflow",
                         description:
-                            "Generates a complete ETL workflow JSON (React Flow graph) from a natural language description. " +
+                            "Primary workflow-creation tool. Generates a complete ETL workflow JSON (React Flow graph) from a natural language description and imports it into the ETL canvas when the VS Code extension is connected. " +
                             "Call get_etl_workflow_schema first in the same MCP session. " +
+                            "For API sources, this tool fetches the API schema before generating nodes and mappings, so the canvas is based on the real source fields. " +
+                            "After this tool returns, write/show the workflow JSON directly to the canvas/user and stop to ask: 'Is this workflow correct?' Do not call execute tools and do not create Python/pandas fallback code until the user explicitly approves via review_etl_workflow. " +
                             "The returned JSON is version-1 format with nodes (source, transformer, target, system) and edges. " +
                             "It can be loaded directly into the ETL canvas in the VS Code extension.",
                         inputSchema: {
@@ -691,7 +698,7 @@ export class ETLMCPServer {
                 }
 
                 try {
-                    const workflow = generateWorkflowFromDescription(description, format);
+                    const workflow = await this.generateSchemaAwareWorkflow(description, format);
                     this.workflowGeneratedAfterSchema = true;
                     this.generatedWorkflowHashes.add(this.createWorkflowHash(workflow));
                     await this.onWorkflowGenerated?.(workflow);
@@ -915,6 +922,13 @@ export class ETLMCPServer {
                 type: 'object',
                 required: ['description'],
                 sequence: ['get_etl_workflow_schema', 'generate_etl_workflow'],
+                behavior: {
+                    importsToCanvas: true,
+                    schemaFirst: true,
+                    stopAfterGeneration: true,
+                    nextUserPrompt: 'Is this workflow correct?',
+                    forbiddenFallback: 'Do not create standalone Python/pandas ETL code when workflow generation or execution is blocked.'
+                },
                 properties: {
                     description: { type: 'string' },
                     format: { type: 'string', enum: ['full', 'prompt'] }
@@ -993,6 +1007,31 @@ export class ETLMCPServer {
                 }
             }
         };
+    }
+
+    private async generateSchemaAwareWorkflow(description: string, format: string): Promise<WorkflowJSON> {
+        const sourceUrl = this.extractFirstUrl(description);
+        const isApiSource = Boolean(sourceUrl) || /\b(api|rest|json endpoint)\b/i.test(description);
+
+        if (!sourceUrl || !isApiSource) {
+            return generateWorkflowFromDescription(description, format);
+        }
+
+        try {
+            const apiFields = await SchemaFetcher.fetchRestApiSchema(sourceUrl);
+            return generateWorkflowFromDescription(description, format, {
+                sourceFields: apiFields.map((field: any, index: number) => ({
+                    id: `col_${index}`,
+                    name: field.name,
+                    type: field.type
+                }))
+            });
+        } catch (error: any) {
+            return generateWorkflowFromDescription(
+                `${description}\n\nAPI schema fetch failed: ${error.message}. Use default fields until the user confirms the workflow.`,
+                format
+            );
+        }
     }
 
     private extractPostgresCredentials(text: string): Partial<{
@@ -1292,7 +1331,7 @@ export class ETLMCPServer {
         console.log("MCP Stdio Server running...");
     }
 
-    public async startHttp(port: number = 3001) {
+    public async startHttp(port: number = 3001): Promise<void> {
         const app = express();
         app.use(cors());
 
@@ -1329,8 +1368,12 @@ export class ETLMCPServer {
             }
         });
 
-        app.listen(port, () => {
-            console.log(`MCP SSE Server listening on http://localhost:${port}/sse`);
+        await new Promise<void>((resolve, reject) => {
+            this.httpServer = app.listen(port, () => {
+                console.log(`MCP SSE Server listening on http://localhost:${port}/sse`);
+                resolve();
+            });
+            this.httpServer.on("error", reject);
         });
     }
 }
