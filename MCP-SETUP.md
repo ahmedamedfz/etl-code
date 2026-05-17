@@ -114,17 +114,27 @@ Once connected, Bob/Cline will have access to these MCP tools:
 
 Executes the ETL pipeline with CSV content and AI-generated mapping.
 
+Execution is intentionally gated. Clients must use this sequence in the same MCP session:
+
+1. Call `get_etl_workflow_schema`
+2. Call `generate_etl_workflow`
+3. Show the generated workflow to the user and receive explicit approval
+4. Call `review_etl_workflow` with `workflow`, `userReviewed: true`, and the user's approval text in `userResponse`
+5. Call `execute_etl_pipeline` or `execute_etl_pipeline_postgres` with the returned `workflowReviewToken`
+
 **Parameters:**
 - `csvContent` (string, required): The raw CSV data to process
 - `tableName` (string, required): Target database table name
 - `aiMappingJson` (string, required): JSON string containing AI-generated mapping logic
+- `workflowReviewToken` (string, required): Token returned by `review_etl_workflow`
 
 **Example Usage:**
 ```typescript
 {
   "csvContent": "name,age,email\nJohn,30,john@example.com",
   "tableName": "users",
-  "aiMappingJson": "{\"name\":\"name\",\"age\":\"user_age\",\"email\":\"email_address\"}"
+  "aiMappingJson": "{\"name\":\"name\",\"age\":\"user_age\",\"email\":\"email_address\"}",
+  "workflowReviewToken": "<token from review_etl_workflow>"
 }
 ```
 

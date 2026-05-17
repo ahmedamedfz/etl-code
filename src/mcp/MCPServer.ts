@@ -14,7 +14,7 @@ import {
 import express from "express";
 import cors from "cors";
 import Papa from "papaparse";
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 import { ExecutionEngine } from "../pipeline/ExecutionEngine";
 import { OracleMockConnector } from "../db/OracleMockConnector";
@@ -33,6 +33,10 @@ export class ETLMCPServer {
     private registry: ResourceRegistry;
     private compiler: CompilerPipeline;
     private validator: ValidationEngine;
+    private workflowSchemaRequested = false;
+    private workflowGeneratedAfterSchema = false;
+    private generatedWorkflowHashes = new Set<string>();
+    private approvedWorkflowTokens = new Map<string, { workflowHash: string; userResponse: string }>();
 
     constructor(private readonly onWorkflowGenerated?: WorkflowGeneratedHandler) {
         this.engine = new ExecutionEngine();
@@ -161,7 +165,10 @@ export class ETLMCPServer {
                 tools: [
                     {
                         name: "execute_etl_pipeline",
-                        description: "Executes the ETL pipeline using the built-in mock Oracle connector",
+                        description:
+                            "Executes the ETL pipeline using the built-in mock Oracle connector. " +
+                            "Execution is blocked until this MCP session has called get_etl_workflow_schema, " +
+                            "then generate_etl_workflow, then review_etl_workflow with explicit userResponse.",
                         inputSchema: {
                             type: "object",
                             properties: {
@@ -179,6 +186,8 @@ export class ETLMCPServer {
                         description: "Executes the ETL pipeline against a real PostgreSQL/Supabase database. " +
                                      "Accepts explicit connection fields or natural-language descriptions containing " +
                                      "Postgres/Supabase credentials and an API URL. Falls back to SUPABASE_* environment variables. " +
+                                     "Execution is blocked until this MCP session has called get_etl_workflow_schema, " +
+                                     "then generate_etl_workflow, then review_etl_workflow with explicit userResponse. " +
                                      "If automatic execution cannot proceed, do not generate a standalone Python script; " +
                                      "ask the user to validate the generated ETL workflow first.",
                         inputSchema: {
@@ -204,6 +213,7 @@ export class ETLMCPServer {
                     {
                         name: "execute_etl_pipelines_postgres",
                         description: "Alias of execute_etl_pipeline_postgres for natural-language clients that pluralize the tool name. " +
+                                     "Execution follows get_etl_workflow_schema -> generate_etl_workflow -> review_etl_workflow -> execute. " +
                                      "If automatic execution cannot proceed, ask the user to validate the generated ETL workflow first.",
                         inputSchema: {
                             type: "object",
@@ -229,7 +239,8 @@ export class ETLMCPServer {
                         name: "review_etl_workflow",
                         description:
                             "Validate and mark an ETL workflow as reviewed by the user. " +
-                            "Call this only after showing the generated workflow to the user and receiving explicit approval. " +
+                            "Call this only after get_etl_workflow_schema, generate_etl_workflow, showing the generated workflow to the user, " +
+                            "and receiving an explicit user response. " +
                             "Returns workflowReviewToken required by execute_etl_pipeline and execute_etl_pipeline_postgres.",
                         inputSchema: {
                             type: "object",
@@ -238,16 +249,16 @@ export class ETLMCPServer {
                                     type: "object",
                                     description: "Workflow JSON the user reviewed"
                                 },
-                                description: {
-                                    type: "string",
-                                    description: "Natural-language ETL description. Used to generate workflow when workflow is omitted."
-                                },
                                 userReviewed: {
                                     type: "boolean",
                                     description: "Must be true only after explicit user review/approval"
+                                },
+                                userResponse: {
+                                    type: "string",
+                                    description: "The user's explicit response approving the generated ETL workflow"
                                 }
                             },
-                            required: ["userReviewed"]
+                            required: ["workflow", "userReviewed", "userResponse"]
                         }
                     },
                     {
@@ -303,6 +314,7 @@ export class ETLMCPServer {
                         name: "generate_etl_workflow",
                         description:
                             "Generates a complete ETL workflow JSON (React Flow graph) from a natural language description. " +
+                            "Call get_etl_workflow_schema first in the same MCP session. " +
                             "The returned JSON is version-1 format with nodes (source, transformer, target, system) and edges. " +
                             "It can be loaded directly into the ETL canvas in the VS Code extension.",
                         inputSchema: {
@@ -546,7 +558,12 @@ export class ETLMCPServer {
 
             // ── Tool: review_etl_workflow ─────────────────────────────────────
             if (request.params.name === "review_etl_workflow") {
-                const { workflow, description, userReviewed } = request.params.arguments as any;
+                const { workflow, userReviewed, userResponse } = request.params.arguments as any;
+                const sequenceGate = this.requireWorkflowSequence('review_etl_workflow');
+                if (sequenceGate) {
+                    return sequenceGate;
+                }
+
                 if (userReviewed !== true) {
                     return {
                         isError: true,
@@ -561,8 +578,22 @@ export class ETLMCPServer {
                     };
                 }
 
+                if (typeof userResponse !== 'string' || userResponse.trim().length === 0) {
+                    return {
+                        isError: true,
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                success: false,
+                                status: 'user_response_required',
+                                error: 'userResponse must contain the explicit user approval response before an execution token is issued.'
+                            }, null, 2)
+                        }]
+                    };
+                }
+
                 try {
-                    if (!workflow && !description) {
+                    if (!workflow) {
                         return {
                             isError: true,
                             content: [{
@@ -570,13 +601,29 @@ export class ETLMCPServer {
                                 text: JSON.stringify({
                                     success: false,
                                     status: 'workflow_required',
-                                    error: 'Pass either workflow or description so the MCP can validate and issue a review token.'
+                                    error: 'Pass the workflow returned by generate_etl_workflow so the MCP can validate the schema-first workflow sequence.'
                                 }, null, 2)
                             }]
                         };
                     }
 
-                    const reviewedWorkflow = workflow || generateWorkflowFromDescription(description || '');
+                    const reviewedWorkflow = workflow;
+                    const workflowHash = this.createWorkflowHash(reviewedWorkflow);
+                    if (!this.generatedWorkflowHashes.has(workflowHash)) {
+                        return {
+                            isError: true,
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    success: false,
+                                    status: 'workflow_generation_required',
+                                    error: 'Workflow must come from generate_etl_workflow after get_etl_workflow_schema in this MCP session.',
+                                    nextAction: 'Call get_etl_workflow_schema, call generate_etl_workflow, show the workflow to the user, then call review_etl_workflow with userResponse.'
+                                }, null, 2)
+                            }]
+                        };
+                    }
+
                     const validation = await this.validator.validate(reviewedWorkflow);
                     if (!validation.valid) {
                         return {
@@ -593,15 +640,17 @@ export class ETLMCPServer {
                         };
                     }
 
+                    const workflowReviewToken = this.issueWorkflowReviewToken(reviewedWorkflow, userResponse.trim());
                     return {
                         content: [{
                             type: "text",
                             text: JSON.stringify({
                                 success: true,
                                 status: 'workflow_reviewed',
-                                workflowReviewToken: this.createWorkflowReviewToken(reviewedWorkflow),
+                                workflowReviewToken,
                                 validation,
                                 workflow: reviewedWorkflow,
+                                userResponse: userResponse.trim(),
                                 nextAction: 'Pass workflowReviewToken and the reviewed workflow into the execute tool.'
                             }, null, 2)
                         }]
@@ -629,102 +678,22 @@ export class ETLMCPServer {
 
             // ── Tool: get_etl_workflow_schema ────────────────────────────────
             if (request.params.name === "get_etl_workflow_schema") {
-                return { content: [{ type: "text", text: JSON.stringify(this.getWorkflowJsonSchema(), null, 2) }] };
-            }
-
-            // ── Tool: review_etl_workflow ─────────────────────────────────────
-            if (request.params.name === "review_etl_workflow") {
-                const { workflow, description, userReviewed } = request.params.arguments as any;
-                if (userReviewed !== true) {
-                    return {
-                        isError: true,
-                        content: [{
-                            type: "text",
-                            text: JSON.stringify({
-                                success: false,
-                                status: 'user_review_required',
-                                error: 'userReviewed must be true after explicit user review before an execution token is issued.'
-                            }, null, 2)
-                        }]
-                    };
-                }
-
-                try {
-                    if (!workflow && !description) {
-                        return {
-                            isError: true,
-                            content: [{
-                                type: "text",
-                                text: JSON.stringify({
-                                    success: false,
-                                    status: 'workflow_required',
-                                    error: 'Pass either workflow or description so the MCP can validate and issue a review token.'
-                                }, null, 2)
-                            }]
-                        };
-                    }
-
-                    const reviewedWorkflow = workflow || generateWorkflowFromDescription(description || '');
-                    const validation = await this.validator.validate(reviewedWorkflow);
-                    if (!validation.valid) {
-                        return {
-                            isError: true,
-                            content: [{
-                                type: "text",
-                                text: JSON.stringify({
-                                    success: false,
-                                    status: 'workflow_validation_failed',
-                                    error: 'Workflow did not pass validation. Fix or regenerate it before execution.',
-                                    validation
-                                }, null, 2)
-                            }]
-                        };
-                    }
-
-                    return {
-                        content: [{
-                            type: "text",
-                            text: JSON.stringify({
-                                success: true,
-                                status: 'workflow_reviewed',
-                                workflowReviewToken: this.createWorkflowReviewToken(reviewedWorkflow),
-                                validation,
-                                workflow: reviewedWorkflow,
-                                nextAction: 'Pass workflowReviewToken and the reviewed workflow into the execute tool.'
-                            }, null, 2)
-                        }]
-                    };
-                } catch (error: any) {
-                    return { isError: true, content: [{ type: "text", text: `Workflow review failed: ${error.message}` }] };
-                }
-            }
-
-            // ── Tool: get_mcp_tool_schemas ───────────────────────────────────
-            if (request.params.name === "get_mcp_tool_schemas") {
-                const { toolName } = request.params.arguments as any;
-                const schemas = this.getMcpToolSchemas();
-                const payload = toolName ? { [toolName]: schemas[toolName] } : schemas;
-
-                if (toolName && !schemas[toolName]) {
-                    return {
-                        isError: true,
-                        content: [{ type: "text", text: `Tool schema not found: ${toolName}` }]
-                    };
-                }
-
-                return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
-            }
-
-            // ── Tool: get_etl_workflow_schema ────────────────────────────────
-            if (request.params.name === "get_etl_workflow_schema") {
+                this.workflowSchemaRequested = true;
                 return { content: [{ type: "text", text: JSON.stringify(this.getWorkflowJsonSchema(), null, 2) }] };
             }
 
             // ── Tool: generate_etl_workflow ───────────────────────────────────────────────
             if (request.params.name === "generate_etl_workflow") {
                 const { description, format = 'full' } = request.params.arguments as any;
+                const sequenceGate = this.requireWorkflowSequence('generate_etl_workflow');
+                if (sequenceGate) {
+                    return sequenceGate;
+                }
+
                 try {
                     const workflow = generateWorkflowFromDescription(description, format);
+                    this.workflowGeneratedAfterSchema = true;
+                    this.generatedWorkflowHashes.add(this.createWorkflowHash(workflow));
                     await this.onWorkflowGenerated?.(workflow);
                     return {
                         content: [{
@@ -796,9 +765,11 @@ export class ETLMCPServer {
     }
 
     private requireWorkflowReview(args: any, description = '') {
-        const workflow = args?.workflow || (description ? generateWorkflowFromDescription(description) : undefined);
-        const expectedToken = workflow ? this.createWorkflowReviewToken(workflow) : undefined;
         const suppliedToken = args?.workflowReviewToken;
+        const sequenceGate = this.requireWorkflowSequence('execute_etl');
+        if (sequenceGate) {
+            return sequenceGate;
+        }
 
         if (!suppliedToken) {
             return this.createWorkflowValidationRequiredResponse(
@@ -806,24 +777,25 @@ export class ETLMCPServer {
                 'Execution blocked until the generated ETL workflow is reviewed by the user.',
                 {
                     status: 'workflow_review_required',
-                    nextAction: 'Show the workflow to the user, call review_etl_workflow with userReviewed=true, then retry execution with workflowReviewToken.',
-                    workflow
+                    nextAction: 'Call get_etl_workflow_schema, call generate_etl_workflow, show the workflow to the user, call review_etl_workflow with userReviewed=true and userResponse, then retry execution with workflowReviewToken.'
                 }
             );
         }
 
-        if (!expectedToken) {
+        const approvedToken = this.approvedWorkflowTokens.get(suppliedToken);
+        if (!approvedToken) {
             return this.createWorkflowValidationRequiredResponse(
                 description,
-                'Execution blocked because workflowReviewToken cannot be verified without a workflow or description.',
+                'Execution blocked because workflowReviewToken was not issued after user validation in this MCP session.',
                 {
-                    status: 'workflow_review_required',
-                    nextAction: 'Pass the reviewed workflow along with workflowReviewToken, or pass the original description used to generate the workflow.'
+                    status: 'workflow_review_token_invalid',
+                    nextAction: 'Restart the required sequence: get_etl_workflow_schema -> generate_etl_workflow -> user validation -> review_etl_workflow -> execute.'
                 }
             );
         }
 
-        if (suppliedToken !== expectedToken) {
+        const workflow = args?.workflow;
+        if (workflow && this.createWorkflowHash(workflow) !== approvedToken.workflowHash) {
             return this.createWorkflowValidationRequiredResponse(
                 description,
                 'Execution blocked because workflowReviewToken does not match the reviewed workflow.',
@@ -837,7 +809,42 @@ export class ETLMCPServer {
         return undefined;
     }
 
-    private createWorkflowReviewToken(workflow: WorkflowJSON): string {
+    private requireWorkflowSequence(stage: 'generate_etl_workflow' | 'review_etl_workflow' | 'execute_etl') {
+        if (!this.workflowSchemaRequested) {
+            return this.createWorkflowValidationRequiredResponse(
+                '',
+                'Workflow schema must be requested before any ETL workflow can be generated, reviewed, or executed.',
+                {
+                    status: 'workflow_schema_required',
+                    nextAction: 'Call get_etl_workflow_schema first.'
+                }
+            );
+        }
+
+        if ((stage === 'review_etl_workflow' || stage === 'execute_etl') && !this.workflowGeneratedAfterSchema) {
+            return this.createWorkflowValidationRequiredResponse(
+                '',
+                'ETL workflow must be generated after the schema is requested and before user validation or execution.',
+                {
+                    status: 'etl_workflow_required',
+                    nextAction: 'Call generate_etl_workflow, show the generated workflow to the user, then call review_etl_workflow with userResponse.'
+                }
+            );
+        }
+
+        return undefined;
+    }
+
+    private issueWorkflowReviewToken(workflow: WorkflowJSON, userResponse: string): string {
+        const workflowHash = this.createWorkflowHash(workflow);
+        const token = createHash('sha256')
+            .update(`${workflowHash}:${userResponse}:${randomUUID()}`)
+            .digest('hex');
+        this.approvedWorkflowTokens.set(token, { workflowHash, userResponse });
+        return token;
+    }
+
+    private createWorkflowHash(workflow: WorkflowJSON): string {
         return createHash('sha256')
             .update(this.stableStringify(workflow))
             .digest('hex');
@@ -862,6 +869,7 @@ export class ETLMCPServer {
             execute_etl_pipeline: {
                 type: 'object',
                 required: ['csvContent', 'tableName', 'aiMappingJson', 'workflowReviewToken'],
+                sequence: ['get_etl_workflow_schema', 'generate_etl_workflow', 'review_etl_workflow', 'execute_etl_pipeline'],
                 properties: {
                     csvContent: { type: 'string' },
                     tableName: { type: 'string' },
@@ -873,6 +881,7 @@ export class ETLMCPServer {
             execute_etl_pipeline_postgres: {
                 type: 'object',
                 required: ['workflowReviewToken'],
+                sequence: ['get_etl_workflow_schema', 'generate_etl_workflow', 'review_etl_workflow', 'execute_etl_pipeline_postgres'],
                 properties: {
                     csvContent: { type: 'string' },
                     description: { type: 'string' },
@@ -894,12 +903,28 @@ export class ETLMCPServer {
             },
             review_etl_workflow: {
                 type: 'object',
-                required: ['userReviewed'],
+                required: ['workflow', 'userReviewed', 'userResponse'],
+                sequence: ['get_etl_workflow_schema', 'generate_etl_workflow', 'review_etl_workflow'],
                 properties: {
                     workflow: this.getWorkflowJsonSchema(),
-                    description: { type: 'string' },
-                    userReviewed: { type: 'boolean' }
+                    userReviewed: { type: 'boolean' },
+                    userResponse: { type: 'string' }
                 }
+            },
+            generate_etl_workflow: {
+                type: 'object',
+                required: ['description'],
+                sequence: ['get_etl_workflow_schema', 'generate_etl_workflow'],
+                properties: {
+                    description: { type: 'string' },
+                    format: { type: 'string', enum: ['full', 'prompt'] }
+                }
+            },
+            get_etl_workflow_schema: {
+                type: 'object',
+                required: [],
+                sequence: ['get_etl_workflow_schema'],
+                properties: {}
             }
         };
     }
