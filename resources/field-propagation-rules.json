@@ -1,0 +1,143 @@
+{
+  "propagationRules": {
+    "source": {
+      "hasInput": false,
+      "hasOutput": true,
+      "behavior": "Define output fields from data source schema",
+      "fieldGeneration": "auto-detect or manual",
+      "propagatesTo": ["transformer", "target"]
+    },
+    "system": {
+      "hasInput": false,
+      "hasOutput": true,
+      "behavior": "Generate synthetic fields based on system type",
+      "fieldGeneration": "config-driven",
+      "propagatesTo": ["transformer", "target"]
+    },
+    "transformer": {
+      "hasInput": true,
+      "hasOutput": true,
+      "behavior": "Transform input fields based on operation",
+      "fieldGeneration": "operation-specific",
+      "propagatesTo": ["transformer", "target"],
+      "operationRules": {
+        "filter": {
+          "inputBehavior": "Receives all upstream fields",
+          "outputBehavior": "Passes through all input fields unchanged",
+          "transformation": "identity",
+          "example": "input: [A, B, C] → output: [A, B, C]"
+        },
+        "select": {
+          "inputBehavior": "Receives all upstream fields",
+          "outputBehavior": "Outputs only selected subset",
+          "transformation": "subset",
+          "example": "input: [A, B, C], select: [A, C] → output: [A, C]"
+        },
+        "map": {
+          "inputBehavior": "Receives specific fields via connections",
+          "outputBehavior": "Outputs transformed fields",
+          "transformation": "modify",
+          "example": "input: [email] → output: [normalized_email]"
+        },
+        "aggregate": {
+          "inputBehavior": "Receives fields to group and aggregate",
+          "outputBehavior": "Outputs group keys + aggregation results",
+          "transformation": "reduce",
+          "example": "input: [country, amount] → output: [country, total_amount]",
+          "defaultFields": [
+            {"id": "agg_1", "name": "group_key", "type": "string"},
+            {"id": "agg_2", "name": "total_count", "type": "number"}
+          ]
+        },
+        "join": {
+          "inputBehavior": "Receives fields from two upstream nodes",
+          "outputBehavior": "Outputs merged fields from both inputs",
+          "transformation": "merge",
+          "example": "left: [id, name], right: [id, email] → output: [id, name, email]",
+          "allowsMultipleInputs": true
+        },
+        "sort": {
+          "inputBehavior": "Receives all upstream fields",
+          "outputBehavior": "Passes through all fields in sorted order",
+          "transformation": "identity",
+          "example": "input: [A, B, C] → output: [A, B, C] (sorted)"
+        },
+        "derive-column": {
+          "inputBehavior": "Receives fields used in expression",
+          "outputBehavior": "Outputs all input fields + new derived field",
+          "transformation": "extend",
+          "example": "input: [first, last] → output: [first, last, full_name]"
+        },
+        "rename-column": {
+          "inputBehavior": "Receives field to rename",
+          "outputBehavior": "Outputs field with new name",
+          "transformation": "rename",
+          "example": "input: [old_name] → output: [new_name]"
+        },
+        "union": {
+          "inputBehavior": "Receives fields from multiple upstream nodes",
+          "outputBehavior": "Outputs unified schema from all inputs",
+          "transformation": "merge",
+          "example": "input1: [A, B], input2: [A, C] → output: [A, B, C]",
+          "allowsMultipleInputs": true
+        },
+        "deduplicate": {
+          "inputBehavior": "Receives all upstream fields",
+          "outputBehavior": "Passes through all fields with duplicates removed",
+          "transformation": "identity",
+          "example": "input: [A, B, C] → output: [A, B, C] (unique rows)"
+        }
+      }
+    },
+    "target": {
+      "hasInput": true,
+      "hasOutput": false,
+      "behavior": "Receive and map fields to destination schema",
+      "fieldGeneration": "target-schema-driven",
+      "propagatesTo": []
+    }
+  },
+  "connectionModes": {
+    "field-level": {
+      "description": "Connect specific output field to specific input field",
+      "handleFormat": "output-{fieldId} → input-{fieldId}",
+      "propagation": "Single field propagates",
+      "example": "output-col_0 → input-sql_col_2"
+    },
+    "node-level": {
+      "description": "Connect all output fields to node",
+      "handleFormat": "node-source → node-target",
+      "propagation": "All fields propagate",
+      "example": "source node → transformer node (all fields)"
+    }
+  },
+  "fieldMerging": {
+    "targetNode": {
+      "rule": "Accumulate fields from multiple connections",
+      "behavior": "Union of all incoming fields",
+      "deduplication": "By field ID"
+    },
+    "transformerNode": {
+      "singleInput": {
+        "rule": "Most transformers accept single input",
+        "exceptions": ["join", "union"]
+      },
+      "multipleInput": {
+        "operations": ["join", "union"],
+        "rule": "Merge fields from all inputs",
+        "behavior": "Schema alignment and merging"
+      }
+    }
+  },
+  "typeHandling": {
+    "compatibilityCheck": {
+      "rule": "Check type compatibility on field connections",
+      "action": "Warn if incompatible, suggest coercion"
+    },
+    "autoCoercion": {
+      "enabled": false,
+      "rule": "Require explicit type conversion nodes",
+      "example": "Use map transformer with REAL() function"
+    }
+  }
+}

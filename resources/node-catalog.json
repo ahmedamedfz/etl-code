@@ -1,0 +1,249 @@
+{
+  "sources": [
+    {
+      "type": "csv",
+      "label": "CSV Source",
+      "config": {
+        "filePath": {"type": "string", "required": true},
+        "delimiter": {"type": "string", "default": ","},
+        "skipRows": {"type": "number", "default": 0}
+      },
+      "outputFields": "auto-detected"
+    },
+    {
+      "type": "excel",
+      "label": "Excel Source",
+      "config": {
+        "filePath": {"type": "string", "required": true},
+        "sheet": {"type": "string"},
+        "skipRows": {"type": "number", "default": 0}
+      },
+      "outputFields": "auto-detected"
+    },
+    {
+      "type": "sqlite",
+      "label": "SQLite Source",
+      "config": {
+        "connectionString": {"type": "string", "required": true},
+        "table": {"type": "string", "required": true}
+      },
+      "outputFields": "schema-introspection"
+    },
+    {
+      "type": "postgres",
+      "label": "PostgreSQL Source",
+      "config": {
+        "connectionString": {"type": "string", "required": true},
+        "table": {"type": "string", "required": true}
+      },
+      "outputFields": "schema-introspection"
+    },
+    {
+      "type": "mysql",
+      "label": "MySQL Source",
+      "config": {
+        "connectionString": {"type": "string", "required": true},
+        "table": {"type": "string", "required": true}
+      },
+      "outputFields": "schema-introspection"
+    },
+    {
+      "type": "rest-api",
+      "label": "REST API Source",
+      "config": {
+        "url": {"type": "string", "required": true},
+        "method": {"type": "string", "default": "GET", "enum": ["GET", "POST"]}
+      },
+      "outputFields": "response-sample"
+    }
+  ],
+  "transformers": [
+    {
+      "operation": "filter",
+      "label": "Filter",
+      "config": {
+        "condition": {"type": "expression", "required": true}
+      },
+      "fieldTransformation": "passthrough"
+    },
+    {
+      "operation": "select",
+      "label": "Select",
+      "config": {
+        "columns": {"type": "field-list", "required": true}
+      },
+      "fieldTransformation": "subset"
+    },
+    {
+      "operation": "map",
+      "label": "Map",
+      "config": {
+        "targetColumn": {"type": "text"},
+        "expression": {"type": "expression", "required": true}
+      },
+      "fieldTransformation": "modify"
+    },
+    {
+      "operation": "aggregate",
+      "label": "Aggregate",
+      "config": {
+        "groupBy": {"type": "field-list", "required": true},
+        "aggregations": {"type": "expression", "required": true}
+      },
+      "fieldTransformation": "reduce",
+      "defaultOutputFields": [
+        {"id": "agg_1", "name": "group_key", "type": "string"},
+        {"id": "agg_2", "name": "total_count", "type": "number"}
+      ]
+    },
+    {
+      "operation": "join",
+      "label": "Join",
+      "config": {
+        "joinType": {"type": "select", "required": true, "options": ["inner", "left", "right", "full"]},
+        "leftKey": {"type": "field", "required": true},
+        "rightKey": {"type": "field", "required": true}
+      },
+      "fieldTransformation": "merge",
+      "allowsMultipleInputs": true
+    },
+    {
+      "operation": "sort",
+      "label": "Sort",
+      "config": {
+        "column": {"type": "field", "required": true},
+        "order": {"type": "select", "required": true, "options": ["asc", "desc"]}
+      },
+      "fieldTransformation": "passthrough"
+    },
+    {
+      "operation": "derive-column",
+      "label": "Derive Column",
+      "config": {
+        "columnName": {"type": "text", "required": true},
+        "expression": {"type": "expression", "required": true}
+      },
+      "fieldTransformation": "extend"
+    },
+    {
+      "operation": "rename-column",
+      "label": "Rename Column",
+      "config": {
+        "sourceColumn": {"type": "field", "required": true},
+        "targetColumn": {"type": "text", "required": true}
+      },
+      "fieldTransformation": "rename"
+    },
+    {
+      "operation": "union",
+      "label": "Union",
+      "config": {
+        "mode": {"type": "select", "required": true, "options": ["union", "union-distinct"]},
+        "columnMapping": {"type": "expression"}
+      },
+      "fieldTransformation": "merge",
+      "allowsMultipleInputs": true
+    },
+    {
+      "operation": "deduplicate",
+      "label": "Deduplicate",
+      "config": {
+        "columns": {"type": "field-list", "required": true},
+        "keep": {"type": "select", "required": true, "options": ["first", "last"]}
+      },
+      "fieldTransformation": "passthrough"
+    }
+  ],
+  "targets": [
+    {
+      "type": "sqlite",
+      "label": "SQLite Target",
+      "config": {
+        "connectionString": {"type": "string", "required": true},
+        "table": {"type": "string", "required": true},
+        "mode": {"type": "string", "default": "append", "enum": ["append", "replace", "upsert"]}
+      },
+      "inputFields": "target-schema"
+    },
+    {
+      "type": "postgres",
+      "label": "PostgreSQL Target",
+      "config": {
+        "connectionString": {"type": "string", "required": true},
+        "table": {"type": "string", "required": true},
+        "mode": {"type": "string", "default": "append", "enum": ["append", "replace", "upsert"]}
+      },
+      "inputFields": "target-schema"
+    },
+    {
+      "type": "mysql",
+      "label": "MySQL Target",
+      "config": {
+        "connectionString": {"type": "string", "required": true},
+        "table": {"type": "string", "required": true},
+        "mode": {"type": "string", "default": "append", "enum": ["append", "replace", "upsert"]}
+      },
+      "inputFields": "target-schema"
+    },
+    {
+      "type": "mongodb",
+      "label": "MongoDB Target",
+      "config": {
+        "connectionString": {"type": "string", "required": true},
+        "collection": {"type": "string", "required": true},
+        "mode": {"type": "string", "default": "append"}
+      },
+      "inputFields": "flexible"
+    },
+    {
+      "type": "rest-api",
+      "label": "REST API Target",
+      "config": {
+        "url": {"type": "string", "required": true},
+        "method": {"type": "string", "default": "POST", "enum": ["POST", "PUT", "PATCH"]},
+        "headers": {"type": "string", "default": "{}"}
+      },
+      "inputFields": "api-contract"
+    }
+  ],
+  "system": [
+    {
+      "type": "current-datetime",
+      "label": "Current Datetime",
+      "config": {
+        "fieldName": {"type": "string", "required": true, "default": "current_timestamp"},
+        "format": {"type": "string", "default": "iso", "enum": ["iso", "unix", "custom"]}
+      },
+      "outputFields": [{"id": "out_datetime", "name": "current_timestamp", "type": "datetime"}]
+    },
+    {
+      "type": "uuid",
+      "label": "UUID Generator",
+      "config": {
+        "fieldName": {"type": "string", "required": true, "default": "generated_id"},
+        "version": {"type": "string", "default": "v4", "enum": ["v4", "v1"]}
+      },
+      "outputFields": [{"id": "out_uuid", "name": "generated_id", "type": "string"}]
+    },
+    {
+      "type": "sequential-id",
+      "label": "Sequential ID",
+      "config": {
+        "fieldName": {"type": "string", "required": true, "default": "sequence_id"},
+        "startAt": {"type": "number", "default": 1},
+        "step": {"type": "number", "default": 1}
+      },
+      "outputFields": [{"id": "out_seq", "name": "sequence_id", "type": "number"}]
+    },
+    {
+      "type": "random-int",
+      "label": "Random Integer",
+      "config": {
+        "fieldName": {"type": "string", "required": true, "default": "random_value"},
+        "min": {"type": "number", "default": 0},
+        "max": {"type": "number", "default": 100}
+      },
+      "outputFields": [{"id": "out_random", "name": "random_value", "type": "number"}]
+    }
+  ]
+}

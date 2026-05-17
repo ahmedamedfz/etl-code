@@ -1,0 +1,184 @@
+{
+  "patterns": [
+    {
+      "name": "Simple CSV to Database",
+      "description": "Read CSV file and write to database table",
+      "naturalLanguage": "Load battery.csv into SQLite database table battery_telemetry",
+      "nodes": [
+        {"type": "source", "subType": "csv"},
+        {"type": "target", "subType": "sqlite"}
+      ],
+      "edges": [
+        {"from": "source", "to": "target", "mode": "field-level"}
+      ],
+      "complexity": "simple"
+    },
+    {
+      "name": "Filter and Transform",
+      "description": "Filter data and transform fields before loading",
+      "naturalLanguage": "Load battery.csv, filter records where timestamp is before current time, convert humidity to real, then save to SQLite",
+      "nodes": [
+        {"type": "source", "subType": "csv"},
+        {"type": "system", "subType": "current-datetime"},
+        {"type": "transformer", "operation": "filter"},
+        {"type": "transformer", "operation": "map"},
+        {"type": "target", "subType": "sqlite"}
+      ],
+      "edges": [
+        {"from": "source", "to": "filter"},
+        {"from": "system", "to": "filter"},
+        {"from": "filter", "to": "target"},
+        {"from": "source", "to": "map"},
+        {"from": "map", "to": "target"}
+      ],
+      "complexity": "medium"
+    },
+    {
+      "name": "Aggregate and Join",
+      "description": "Aggregate data and join with another source",
+      "naturalLanguage": "Count fault codes by state flag, add sequential IDs, and combine with battery data",
+      "nodes": [
+        {"type": "source", "subType": "csv"},
+        {"type": "transformer", "operation": "aggregate"},
+        {"type": "system", "subType": "sequential-id"},
+        {"type": "target", "subType": "sqlite"}
+      ],
+      "edges": [
+        {"from": "source", "to": "aggregate"},
+        {"from": "aggregate", "to": "target"},
+        {"from": "system", "to": "target"}
+      ],
+      "complexity": "medium"
+    },
+    {
+      "name": "Multi-Source ETL",
+      "description": "Combine data from multiple sources",
+      "naturalLanguage": "Load data from CSV and database, join them, filter, and save to target",
+      "nodes": [
+        {"type": "source", "subType": "csv"},
+        {"type": "source", "subType": "sqlite"},
+        {"type": "transformer", "operation": "join"},
+        {"type": "transformer", "operation": "filter"},
+        {"type": "target", "subType": "postgres"}
+      ],
+      "edges": [
+        {"from": "csv-source", "to": "join"},
+        {"from": "db-source", "to": "join"},
+        {"from": "join", "to": "filter"},
+        {"from": "filter", "to": "target"}
+      ],
+      "complexity": "complex"
+    },
+    {
+      "name": "Data Quality Pipeline",
+      "description": "Clean, deduplicate, and validate data",
+      "naturalLanguage": "Load CSV, remove duplicates based on email, filter invalid records, derive full name, and save",
+      "nodes": [
+        {"type": "source", "subType": "csv"},
+        {"type": "transformer", "operation": "deduplicate"},
+        {"type": "transformer", "operation": "filter"},
+        {"type": "transformer", "operation": "derive-column"},
+        {"type": "target", "subType": "sqlite"}
+      ],
+      "edges": [
+        {"from": "source", "to": "deduplicate"},
+        {"from": "deduplicate", "to": "filter"},
+        {"from": "filter", "to": "derive"},
+        {"from": "derive", "to": "target"}
+      ],
+      "complexity": "complex"
+    }
+  ],
+  "fieldMappingExamples": [
+    {
+      "scenario": "Direct mapping",
+      "source": {"id": "col_0", "name": "Timestamp", "type": "date"},
+      "target": {"id": "sql_col_2", "name": "timestamp", "type": "datetime"},
+      "mapping": {
+        "sourceField": "col_0",
+        "targetField": "sql_col_2",
+        "expression": null,
+        "type": "date"
+      }
+    },
+    {
+      "scenario": "Type conversion",
+      "source": {"id": "col_18", "name": "Humidity_Percentage", "type": "float"},
+      "target": {"id": "sql_col_19", "name": "humidity_percentage", "type": "real"},
+      "mapping": {
+        "sourceField": "col_18",
+        "targetField": "sql_col_19",
+        "expression": "REAL({{Humidity_Percentage}})",
+        "type": "real"
+      }
+    },
+    {
+      "scenario": "System-generated field",
+      "source": {"id": "out_seq", "name": "sequence_id", "type": "number"},
+      "target": {"id": "sql_col_0", "name": "id", "type": "integer"},
+      "mapping": {
+        "sourceField": "out_seq",
+        "targetField": "sql_col_0",
+        "expression": null,
+        "type": "number"
+      }
+    },
+    {
+      "scenario": "Aggregation result",
+      "source": {"id": "agg_1", "name": "group_key", "type": "string"},
+      "target": {"id": "sql_col_18", "name": "fault_code", "type": "text"},
+      "mapping": {
+        "sourceField": "agg_1",
+        "targetField": "sql_col_18",
+        "expression": null,
+        "type": "string"
+      }
+    }
+  ],
+  "expressionExamples": [
+    {
+      "operation": "filter",
+      "expression": "{{Timestamp}}<{{current_timestamp}}",
+      "description": "Filter rows where Timestamp is before current_timestamp",
+      "fields": ["Timestamp", "current_timestamp"]
+    },
+    {
+      "operation": "filter",
+      "expression": "{{age}} >= 18 && {{status}} == \"active\"",
+      "description": "Filter adults with active status",
+      "fields": ["age", "status"]
+    },
+    {
+      "operation": "map",
+      "expression": "REAL({{Humidity_Percentage}})",
+      "description": "Convert humidity to real number",
+      "fields": ["Humidity_Percentage"]
+    },
+    {
+      "operation": "map",
+      "expression": "lower({{email}})",
+      "description": "Convert email to lowercase",
+      "fields": ["email"]
+    },
+    {
+      "operation": "aggregate",
+      "groupBy": "{{State_Flag}}",
+      "aggregations": "Count({{State_Flag}})",
+      "description": "Count records by state flag",
+      "fields": ["State_Flag"]
+    },
+    {
+      "operation": "aggregate",
+      "groupBy": "{{country}}, {{region}}",
+      "aggregations": "sum({{amount}}), avg({{price}})",
+      "description": "Sum amount and average price by country and region",
+      "fields": ["country", "region", "amount", "price"]
+    },
+    {
+      "operation": "derive-column",
+      "expression": "concat({{first_name}}, \" \", {{last_name}})",
+      "description": "Create full name from parts",
+      "fields": ["first_name", "last_name"]
+    }
+  ]
+}

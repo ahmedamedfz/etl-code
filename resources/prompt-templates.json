@@ -1,0 +1,63 @@
+{
+  "intentExtractor": {
+    "systemPrompt": "You are an ETL intent extraction specialist. Parse natural language into structured ETL requirements.",
+    "userPromptTemplate": "Extract ETL intent from: {userDescription}\n\nIdentify:\n1. Data sources (type, location, schema)\n2. Transformations (operations, conditions, expressions)\n3. Target destinations (type, location, schema)\n4. Field mappings and relationships\n5. System-generated fields needed\n\nReturn structured JSON with sources, transformers, targets, and connections.",
+    "outputSchema": {
+      "sources": "array of source definitions",
+      "transformers": "array of transformation definitions",
+      "targets": "array of target definitions",
+      "systemNodes": "array of system generator definitions",
+      "connections": "array of data flow connections"
+    }
+  },
+  "astBuilder": {
+    "systemPrompt": "You are an AST compiler for ETL pipelines. Convert intent into valid Abstract Syntax Tree following strict schema.",
+    "userPromptTemplate": "Build AST from intent:\n{intentJSON}\n\nGenerate AST with:\n- Sequential node IDs (node_1, node_2, ...)\n- Proper field IDs (col_0, sql_col_0, agg_1, out_datetime)\n- Type-safe field definitions\n- Valid config objects\n- Connection specifications\n\nFollow schema: {astSchema}",
+    "constraints": [
+      "Use sequential node IDs starting from node_1",
+      "Generate proper field IDs based on node type",
+      "Ensure all required config properties present",
+      "Validate field types against type system",
+      "Specify connections with source/target node IDs"
+    ]
+  },
+  "graphCompiler": {
+    "systemPrompt": "You are a React Flow graph compiler. Convert AST into valid React Flow JSON with proper handles and edges.",
+    "userPromptTemplate": "Compile AST to React Flow graph:\n{astJSON}\n\nGenerate:\n- Nodes with id, type, position, data\n- Edges with proper handle references\n- Field-level connections using output-{fieldId} and input-{fieldId}\n- Node-level connections using node-source and node-target\n- Edge IDs: edge_{source}_{sourceHandle}_{target}_{targetHandle}\n\nSchema: {graphSchema}\nNode catalog: {nodeCatalog}\nValidation rules: {validationRules}",
+    "outputFormat": "full",
+    "includePositions": true
+  },
+  "validator": {
+    "systemPrompt": "You are an ETL graph validator. Check graph against all validation rules and report errors.",
+    "userPromptTemplate": "Validate graph:\n{graphJSON}\n\nCheck:\n- Graph structure (DAG, no cycles)\n- Node validity (types, configs, fields)\n- Edge validity (endpoints, handles, types)\n- Type compatibility\n- Expression syntax\n\nValidation rules: {validationRules}\n\nReturn: {valid: boolean, errors: [], warnings: []}",
+    "strictMode": true
+  },
+  "repairer": {
+    "systemPrompt": "You are an ETL graph repair specialist. Fix validation errors while preserving user intent.",
+    "userPromptTemplate": "Repair graph:\n{graphJSON}\n\nErrors:\n{errors}\n\nRepair strategies:\n{repairStrategies}\n\nFix errors by:\n1. Correcting invalid node types\n2. Adding missing required fields\n3. Fixing type mismatches with coercion\n4. Correcting handle references\n5. Breaking cycles\n\nReturn corrected graph maintaining original intent.",
+    "maxAttempts": 3,
+    "preserveIntent": true
+  },
+  "fieldMapper": {
+    "systemPrompt": "You are a field mapping specialist. Map source fields to target fields with proper type handling.",
+    "userPromptTemplate": "Map fields:\nSource: {sourceFields}\nTarget: {targetFields}\n\nCreate mappings considering:\n- Name similarity\n- Type compatibility\n- Required vs optional\n- Type coercion needs\n\nReturn: [{sourceField, targetField, expression, type}]",
+    "fuzzyMatching": true,
+    "typeCoercion": true
+  },
+  "typeInferencer": {
+    "systemPrompt": "You are a type inference engine. Infer field types from names, values, and context.",
+    "userPromptTemplate": "Infer types for fields:\n{fields}\n\nContext:\n{context}\n\nUse type system:\n{typeSystem}\n\nReturn fields with inferred types.",
+    "typeSystem": ["string", "integer", "float", "number", "boolean", "date", "datetime", "any"]
+  },
+  "expressionParser": {
+    "systemPrompt": "You are an expression parser. Parse and validate ETL expressions.",
+    "userPromptTemplate": "Parse expression:\n{expression}\n\nAvailable fields:\n{inputFields}\n\nGrammar:\n- Field references: {{fieldName}}\n- Operators: ==, !=, <, >, <=, >=, &&, ||, !\n- Functions: count, sum, avg, min, max, concat, lower, upper\n- Type conversion: STRING(), INT(), REAL(), DATE(), DATETIME()\n\nValidate syntax and field references. Return: {valid: boolean, parsedExpression: {}, errors: []}",
+    "strictSyntax": true
+  },
+  "layoutOptimizer": {
+    "systemPrompt": "You are a graph layout optimizer. Calculate optimal node positions for visual clarity.",
+    "userPromptTemplate": "Optimize layout for graph:\n{graphJSON}\n\nAlgorithm: Hierarchical left-to-right\n- Sources on left\n- Transformers in middle\n- Targets on right\n- Minimize edge crossings\n- Maintain readability\n\nReturn nodes with updated positions.",
+    "algorithm": "hierarchical",
+    "direction": "LR"
+  }
+}

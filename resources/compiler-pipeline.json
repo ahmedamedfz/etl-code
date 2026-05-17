@@ -1,0 +1,133 @@
+{
+  "pipelineStages": [
+    {
+      "stage": "1_INTENT_EXTRACTION",
+      "input": "Natural language description",
+      "output": "Structured intent object",
+      "purpose": "Parse user requirements into machine-readable intent",
+      "components": [
+        "NLP parser",
+        "Entity extractor",
+        "Requirement classifier"
+      ],
+      "extractedEntities": [
+        "data sources (files, databases, APIs)",
+        "transformations (filter, aggregate, join, etc.)",
+        "target destinations",
+        "field mappings",
+        "conditions and expressions"
+      ]
+    },
+    {
+      "stage": "2_AST_GENERATION",
+      "input": "Structured intent object",
+      "output": "Abstract Syntax Tree (AST)",
+      "purpose": "Convert intent into hierarchical AST representation",
+      "astStructure": {
+        "root": "ETLPipeline",
+        "children": ["SourceNodes", "TransformerNodes", "TargetNodes", "SystemNodes"],
+        "nodeProperties": ["id", "type", "config", "fields", "connections"]
+      },
+      "validations": [
+        "Syntax validation",
+        "Semantic validation",
+        "Type checking"
+      ]
+    },
+    {
+      "stage": "3_SEMANTIC_ANALYSIS",
+      "input": "AST",
+      "output": "Validated and enriched AST",
+      "purpose": "Validate semantics and enrich with type information",
+      "operations": [
+        "Type inference",
+        "Field propagation analysis",
+        "Connection validation",
+        "Expression type checking",
+        "Config validation"
+      ]
+    },
+    {
+      "stage": "4_GRAPH_COMPILATION",
+      "input": "Validated AST",
+      "output": "React Flow graph JSON",
+      "purpose": "Compile AST into executable graph format",
+      "operations": [
+        "Node generation with sequential IDs",
+        "Edge generation with proper handles",
+        "Field ID assignment",
+        "Position calculation",
+        "Handle creation"
+      ]
+    },
+    {
+      "stage": "5_VALIDATION",
+      "input": "Graph JSON",
+      "output": "Validation report + corrected graph",
+      "purpose": "Final validation and error correction",
+      "validations": [
+        "Graph structure validation",
+        "DAG validation",
+        "Type compatibility",
+        "Handle references",
+        "Config completeness"
+      ]
+    },
+    {
+      "stage": "6_OPTIMIZATION",
+      "input": "Validated graph",
+      "output": "Optimized graph",
+      "purpose": "Optimize graph for execution",
+      "optimizations": [
+        "Remove redundant nodes",
+        "Merge compatible transformations",
+        "Optimize field propagation",
+        "Layout optimization"
+      ],
+      "optional": true
+    }
+  ],
+  "errorHandling": {
+    "strategy": "repair-loop",
+    "maxAttempts": 3,
+    "repairStrategies": [
+      {
+        "errorType": "INVALID_NODE_TYPE",
+        "strategy": "Map to closest valid type",
+        "fallback": "Use default source type"
+      },
+      {
+        "errorType": "MISSING_FIELD",
+        "strategy": "Infer from context or use default",
+        "fallback": "Request user input"
+      },
+      {
+        "errorType": "TYPE_MISMATCH",
+        "strategy": "Insert type coercion node",
+        "fallback": "Mark as warning"
+      },
+      {
+        "errorType": "INVALID_EXPRESSION",
+        "strategy": "Parse and correct syntax",
+        "fallback": "Use simplified expression"
+      },
+      {
+        "errorType": "CYCLIC_DEPENDENCY",
+        "strategy": "Break cycle at weakest edge",
+        "fallback": "Reject graph"
+      }
+    ]
+  },
+  "outputFormats": [
+    {
+      "format": "full",
+      "description": "Complete graph with all metadata",
+      "useCase": "Frontend rendering and execution"
+    },
+    {
+      "format": "prompt",
+      "description": "Minimal graph for AI consumption",
+      "useCase": "Code generation and documentation"
+    }
+  ]
+}
