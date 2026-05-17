@@ -26,6 +26,7 @@ import { CompilerPipeline } from "../compiler/pipeline/CompilerPipeline";
 import { ValidationEngine } from "../compiler/ValidationEngine";
 import { AIResponseSchema } from "../types";
 import { SchemaFetcher } from "../services/SchemaFetcher";
+import { ToolFlowLogger } from "./ToolFlowLogger";
 
 export type WorkflowGeneratedHandler = (workflow: unknown) => void | Promise<void>;
 
@@ -36,6 +37,7 @@ export class ETLMCPServer {
     private registry: ResourceRegistry;
     private compiler: CompilerPipeline;
     private validator: ValidationEngine;
+    private toolFlowLogger = new ToolFlowLogger();
     private workflowSchemaRequested = false;
     private workflowGeneratedAfterSchema = false;
     private generatedWorkflowHashes = new Set<string>();
@@ -164,7 +166,8 @@ export class ETLMCPServer {
 
         // ── Tool Handlers ────────────────────────────────────────────────────────
         this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-            return {
+            const sequence = this.toolFlowLogger.nextSequence();
+            const response = {
                 tools: [
                     {
                         name: "execute_etl_pipeline",
@@ -396,9 +399,21 @@ export class ETLMCPServer {
                     }
                 ]
             };
+            this.toolFlowLogger.log({
+                event: 'list_tools',
+                sequence,
+                result: this.toolFlowLogger.sanitize({
+                    tools: response.tools.map(tool => ({
+                        name: tool.name,
+                        description: tool.description,
+                        inputSchema: tool.inputSchema
+                    }))
+                })
+            });
+            return response;
         });
 
-        this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+        this.server.setRequestHandler(CallToolRequestSchema, async (request) => this.withToolFlowLogging(request, async () => {
 
             // ── Tool: execute_etl_pipeline (mock DB) ─────────────────────────
             if (request.params.name === "execute_etl_pipeline") {
@@ -768,7 +783,49 @@ export class ETLMCPServer {
             }
 
             throw new Error(`Tool not found: ${request.params.name}`);
+        }));
+    }
+
+    private async withToolFlowLogging<T>(
+        request: { params: { name: string; arguments?: unknown } },
+        handler: () => Promise<T>
+    ): Promise<T> {
+        const sequence = this.toolFlowLogger.nextSequence();
+        const startTime = Date.now();
+        const prompt = this.toolFlowLogger.extractPrompt(request.params.arguments);
+
+        this.toolFlowLogger.log({
+            event: 'tool_call_start',
+            sequence,
+            toolName: request.params.name,
+            prompt,
+            arguments: this.toolFlowLogger.sanitize(request.params.arguments)
         });
+
+        try {
+            const result = await handler();
+            this.toolFlowLogger.log({
+                event: 'tool_call_result',
+                sequence,
+                toolName: request.params.name,
+                durationMs: Date.now() - startTime,
+                result: this.toolFlowLogger.sanitize(result)
+            });
+            return result;
+        } catch (error: any) {
+            this.toolFlowLogger.log({
+                event: 'tool_call_error',
+                sequence,
+                toolName: request.params.name,
+                durationMs: Date.now() - startTime,
+                error: this.toolFlowLogger.sanitize({
+                    name: error?.name,
+                    message: error?.message,
+                    stack: error?.stack
+                })
+            });
+            throw error;
+        }
     }
 
     private requireWorkflowReview(args: any, description = '') {
