@@ -1,0 +1,8 @@
+{
+    "mcpServers": {
+        "etl-code": {
+            "command": "node",
+            "args": ["/Users/abunawas/Documents/etl-code/dist/mcp/server-entry.js"]
+        }
+    }
+}

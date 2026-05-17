@@ -2,9 +2,14 @@ import * as vscode from 'vscode';
 import { CanvasPanel } from './CanvasPanel';
 import { NodeSidebarProvider } from './NodeSidebarProvider';
 import { NodeDetailsProvider } from './NodeDetailsProvider';
+import { ETLMCPServer } from './mcp/MCPServer';
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('ETL Code extension is now active');
+
+    // Start MCP Server (SSE for external tools like IBM Bob to connect)
+    const mcpServer = new ETLMCPServer();
+    mcpServer.startHttp(3001).catch(err => console.error("MCP Server failed to start", err));
 
     // 1. Initialize Providers
     const nodeSidebarProvider = new NodeSidebarProvider(context.extensionUri, () => {
